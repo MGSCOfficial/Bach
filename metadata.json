@@ -1,0 +1,6 @@
+{
+  "name": "SonicTag",
+  "description": "Editor inteligente de metadatos y carátulas de álbumes para MP3 y M4A con MusicBrainz, Cover Art Archive, iTunes y Deezer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
