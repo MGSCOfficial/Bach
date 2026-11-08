@@ -2,10 +2,13 @@ package com.example.ui.screens
 
 import android.os.Build
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -15,12 +18,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.storage.AccentColorPreset
 import com.example.data.storage.ThemeMode
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.MusicViewModel
@@ -32,6 +39,23 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val accent = LocalAccentColor.current
+
+    // State for API Key modal configuration
+    var activeApiKeyTarget by remember { mutableStateOf<ApiKeyTarget?>(null) }
+
+    activeApiKeyTarget?.let { target ->
+        ApiKeyConfigDialog(
+            target = target,
+            currentKey1 = target.getCurrentKey1(settings),
+            currentKey2 = target.getCurrentKey2(settings),
+            onSave = { k1, k2 ->
+                target.save(viewModel, k1, k2)
+                activeApiKeyTarget = null
+            },
+            onDismiss = { activeApiKeyTarget = null }
+        )
+    }
 
     Scaffold(
         modifier = modifier
@@ -63,16 +87,16 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(2.dp))
 
             // ==================== SECCIÓN 1: APARIENCIA ====================
-            SettingsSectionHeader(title = "Apariencia", icon = Icons.Default.Palette)
+            SettingsSectionHeader(title = "Apariencia", icon = Icons.Default.Palette, tint = accent)
 
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = CardDefaults.outlinedCardBorder().copy(
-                    brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                    brush = SolidColor(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
                 )
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
@@ -94,7 +118,7 @@ fun SettingsScreen(
                             val isSelected = settings.themeMode == mode
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
-                                color = if (isSelected) EmeraldAccent else MaterialTheme.colorScheme.surfaceVariant,
+                                color = if (isSelected) accent else MaterialTheme.colorScheme.surfaceVariant,
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(38.dp)
@@ -133,26 +157,300 @@ fun SettingsScreen(
                         },
                         checked = settings.dynamicColor,
                         enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
+                        accentColor = accent,
                         onCheckedChange = { viewModel.updateDynamicColor(it) }
                     )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // AMOLED Black toggle
+                    SettingsSwitchRow(
+                        title = "Negro AMOLED Puro",
+                        subtitle = "Fondo 100% negro azabache (#000000) para máxima autonomía en pantallas OLED",
+                        checked = settings.amoledDark,
+                        enabled = settings.themeMode != ThemeMode.LIGHT,
+                        accentColor = accent,
+                        onCheckedChange = { viewModel.updateAmoledDark(it) }
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Accent color picker
+                    Text(
+                        text = "Color de acento personalizado",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    )
+                    Text(
+                        text = if (settings.dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            "Material You está activo. Desactívalo para elegir un color fijo."
+                        } else {
+                            "Selecciona el color de acento principal de la interfaz"
+                        },
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        AccentColorPreset.values().forEach { preset ->
+                            val presetColor = when (preset) {
+                                AccentColorPreset.EMERALD -> EmeraldAccent
+                                AccentColorPreset.CYAN -> CyanAccent
+                                AccentColorPreset.VIOLET -> VioletAccent
+                                AccentColorPreset.AMBER -> AmberAccent
+                                AccentColorPreset.ROSE -> RoseAccent
+                                AccentColorPreset.BLUE -> BlueAccent
+                            }
+                            val isChosen = settings.accentPreset == preset && (!settings.dynamicColor || Build.VERSION.SDK_INT < Build.VERSION_CODES.S)
+
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(presetColor)
+                                    .clickable {
+                                        if (settings.dynamicColor) {
+                                            viewModel.updateDynamicColor(false)
+                                        }
+                                        viewModel.updateAccentPreset(preset)
+                                    }
+                                    .border(
+                                        width = if (isChosen) 3.dp else 1.dp,
+                                        color = if (isChosen) Color.White else Color.Transparent,
+                                        shape = CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isChosen) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Seleccionado",
+                                        tint = Color.Black,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
-            // ==================== SECCIÓN 2: METADATOS Y LETRAS ====================
-            SettingsSectionHeader(title = "Metadatos y Letras por Defecto", icon = Icons.Default.Tune)
+            // ==================== SECCIÓN 2: FUENTES DE METADATOS Y CARÁTULAS ====================
+            SettingsSectionHeader(title = "Fuentes de Metadatos y Carátulas", icon = Icons.Default.CloudSync, tint = accent)
 
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = CardDefaults.outlinedCardBorder().copy(
-                    brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                    brush = SolidColor(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+                )
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    // MusicBrainz (Free, Default)
+                    SettingsSourceRow(
+                        name = "MusicBrainz",
+                        description = "Base de datos abierta y colaborativa de música libre",
+                        checked = settings.sourceMusicBrainz,
+                        accentColor = accent,
+                        onCheckedChange = { viewModel.updateSourceEnabled("musicbrainz", it) }
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // iTunes (Free, Default)
+                    SettingsSourceRow(
+                        name = "iTunes Search",
+                        description = "Carátulas de altísima resolución (hasta 3000px) y catálogo oficial",
+                        checked = settings.sourceITunes,
+                        accentColor = accent,
+                        onCheckedChange = { viewModel.updateSourceEnabled("itunes", it) }
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Deezer (Free, Default)
+                    SettingsSourceRow(
+                        name = "Deezer API",
+                        description = "Excelente cobertura de lanzamientos modernos y metadatos",
+                        checked = settings.sourceDeezer,
+                        accentColor = accent,
+                        onCheckedChange = { viewModel.updateSourceEnabled("deezer", it) }
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // TheAudioDB (Free alternative)
+                    SettingsSourceRow(
+                        name = "TheAudioDB",
+                        description = "Catálogo comunitario abierto con carátulas de álbumes",
+                        checked = settings.sourceTheAudioDb,
+                        accentColor = accent,
+                        onCheckedChange = { viewModel.updateSourceEnabled("theaudiodb", it) }
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // NetEase Cloud Music (Free alternative)
+                    SettingsSourceRow(
+                        name = "NetEase Cloud Music",
+                        description = "Catálogo masivo con alta fidelidad para música asiática y global",
+                        checked = settings.sourceNetEase,
+                        accentColor = accent,
+                        onCheckedChange = { viewModel.updateSourceEnabled("netease", it) }
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Spotify Web API (Requires Client ID + Secret)
+                    SettingsSourceRow(
+                        name = "Spotify Web API",
+                        description = "Requiere Client ID y Client Secret de Spotify Developers",
+                        checked = settings.sourceSpotify,
+                        hasApiKey = true,
+                        keyConfigured = settings.spotifyClientId.isNotBlank() && settings.spotifyClientSecret.isNotBlank(),
+                        accentColor = accent,
+                        onCheckedChange = { viewModel.updateSourceEnabled("spotify", it) },
+                        onConfigureKey = { activeApiKeyTarget = ApiKeyTarget.SPOTIFY }
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Last.fm (Requires API Key)
+                    SettingsSourceRow(
+                        name = "Last.fm",
+                        description = "Metadatos y biografía de artistas. Requiere API Key",
+                        checked = settings.sourceLastFm,
+                        hasApiKey = true,
+                        keyConfigured = settings.lastFmApiKey.isNotBlank(),
+                        accentColor = accent,
+                        onCheckedChange = { viewModel.updateSourceEnabled("lastfm", it) },
+                        onConfigureKey = { activeApiKeyTarget = ApiKeyTarget.LASTFM }
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Discogs (Requires Token)
+                    SettingsSourceRow(
+                        name = "Discogs",
+                        description = "Base de datos más exhaustiva para vinilos y rarezas. Requiere Token",
+                        checked = settings.sourceDiscogs,
+                        hasApiKey = true,
+                        keyConfigured = settings.discogsToken.isNotBlank(),
+                        accentColor = accent,
+                        onCheckedChange = { viewModel.updateSourceEnabled("discogs", it) },
+                        onConfigureKey = { activeApiKeyTarget = ApiKeyTarget.DISCOGS }
+                    )
+                }
+            }
+
+            // ==================== SECCIÓN 3: FUENTES DE LETRAS ====================
+            SettingsSectionHeader(title = "Fuentes de Búsqueda de Letras", icon = Icons.Default.Lyrics, tint = accent)
+
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = CardDefaults.outlinedCardBorder().copy(
+                    brush = SolidColor(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+                )
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    // LRCLIB (Free, default)
+                    SettingsSourceRow(
+                        name = "LRCLIB",
+                        description = "Base de letras sincronizadas (.lrc) y no sincronizadas gratuitas",
+                        checked = settings.lyricsSourceLrclib,
+                        accentColor = accent,
+                        onCheckedChange = { viewModel.updateSourceEnabled("lrclib", it) }
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // NetEase Lyrics (Free alternative)
+                    SettingsSourceRow(
+                        name = "NetEase Lyrics",
+                        description = "Servicio de letras sincronizadas con excelente catálogo internacional",
+                        checked = settings.lyricsSourceNetEase,
+                        accentColor = accent,
+                        onCheckedChange = { viewModel.updateSourceEnabled("netease_lyrics", it) }
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Genius (Requires Client Access Token)
+                    SettingsSourceRow(
+                        name = "Genius",
+                        description = "Letras completas anotadas. Requiere Client Access Token",
+                        checked = settings.lyricsSourceGenius,
+                        hasApiKey = true,
+                        keyConfigured = settings.geniusToken.isNotBlank(),
+                        accentColor = accent,
+                        onCheckedChange = { viewModel.updateSourceEnabled("genius", it) },
+                        onConfigureKey = { activeApiKeyTarget = ApiKeyTarget.GENIUS }
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Musixmatch (Requires API Key)
+                    SettingsSourceRow(
+                        name = "Musixmatch",
+                        description = "Mayor catálogo de letras del mundo. Requiere API Key",
+                        checked = settings.lyricsSourceMusixmatch,
+                        hasApiKey = true,
+                        keyConfigured = settings.musixmatchApiKey.isNotBlank(),
+                        accentColor = accent,
+                        onCheckedChange = { viewModel.updateSourceEnabled("musixmatch", it) },
+                        onConfigureKey = { activeApiKeyTarget = ApiKeyTarget.MUSIXMATCH }
+                    )
+                }
+            }
+
+            // ==================== SECCIÓN 4: COMPORTAMIENTO POR DEFECTO ====================
+            SettingsSectionHeader(title = "Comportamiento por Defecto", icon = Icons.Default.Tune, tint = accent)
+
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = CardDefaults.outlinedCardBorder().copy(
+                    brush = SolidColor(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
                 )
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
                     SettingsSwitchRow(
                         title = "Buscar letras automáticamente",
-                        subtitle = "Al aplicar metadatos online, consulta LRCLIB al instante",
+                        subtitle = "Al aplicar metadatos online, consulta fuentes activas al instante",
                         checked = settings.autoSearchLyrics,
+                        accentColor = accent,
                         onCheckedChange = { viewModel.updateAutoSearchLyrics(it) }
                     )
 
@@ -162,8 +460,9 @@ fun SettingsScreen(
 
                     SettingsSwitchRow(
                         title = "Guardar archivo .lrc complementario",
-                        subtitle = "Crea un archivo .lrc con letra sincronizada junto a la pista",
+                        subtitle = "Crea un archivo .lrc sincronizado junto a la canción (protección contra null activa)",
                         checked = settings.defaultSaveLrc,
+                        accentColor = accent,
                         onCheckedChange = { viewModel.updateDefaultSaveLrc(it) }
                     )
 
@@ -175,19 +474,20 @@ fun SettingsScreen(
                         title = "Incrustar letra en el archivo",
                         subtitle = "Escribe la letra directamente dentro de los tags del archivo MP3/M4A",
                         checked = settings.defaultEmbedLyrics,
+                        accentColor = accent,
                         onCheckedChange = { viewModel.updateDefaultEmbedLyrics(it) }
                     )
                 }
             }
 
-            // ==================== SECCIÓN 3: ACERCA DE ====================
-            SettingsSectionHeader(title = "Acerca de la Aplicación", icon = Icons.Default.Info)
+            // ==================== SECCIÓN 5: ACERCA DE ====================
+            SettingsSectionHeader(title = "Acerca de la Aplicación", icon = Icons.Default.Info, tint = accent)
 
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = CardDefaults.outlinedCardBorder().copy(
-                    brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                    brush = SolidColor(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
                 )
             ) {
                 Row(
@@ -198,16 +498,16 @@ fun SettingsScreen(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(46.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(EmeraldDark.copy(alpha = 0.2f)),
+                            .background(accent.copy(alpha = 0.2f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.GraphicEq,
                             contentDescription = null,
-                            tint = EmeraldAccent,
-                            modifier = Modifier.size(24.dp)
+                            tint = accent,
+                            modifier = Modifier.size(26.dp)
                         )
                     }
 
@@ -222,7 +522,7 @@ fun SettingsScreen(
                             )
                         )
                         Text(
-                            text = "Versión 1.0.0 • Gestor de Metadatos y Letras",
+                            text = "Versión 1.1.0 • Edición Pro con Multi-fuente y Material You",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -237,7 +537,7 @@ fun SettingsScreen(
 }
 
 @Composable
-fun SettingsSectionHeader(title: String, icon: ImageVector) {
+fun SettingsSectionHeader(title: String, icon: ImageVector, tint: Color) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(vertical = 4.dp)
@@ -245,7 +545,7 @@ fun SettingsSectionHeader(title: String, icon: ImageVector) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = EmeraldAccent,
+            tint = tint,
             modifier = Modifier.size(16.dp)
         )
         Spacer(modifier = Modifier.width(8.dp))
@@ -253,7 +553,7 @@ fun SettingsSectionHeader(title: String, icon: ImageVector) {
             text = title,
             style = MaterialTheme.typography.labelMedium.copy(
                 fontWeight = FontWeight.Bold,
-                color = EmeraldAccent
+                color = tint
             )
         )
     }
@@ -265,6 +565,7 @@ fun SettingsSwitchRow(
     subtitle: String,
     checked: Boolean,
     enabled: Boolean = true,
+    accentColor: Color,
     onCheckedChange: (Boolean) -> Unit
 ) {
     Row(
@@ -274,7 +575,11 @@ fun SettingsSwitchRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 12.dp)
+        ) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyMedium.copy(
@@ -296,9 +601,279 @@ fun SettingsSwitchRow(
             enabled = enabled,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.Black,
-                checkedTrackColor = EmeraldAccent,
+                checkedTrackColor = accentColor,
                 uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
             )
         )
+    }
+}
+
+@Composable
+fun SettingsSourceRow(
+    name: String,
+    description: String,
+    checked: Boolean,
+    hasApiKey: Boolean = false,
+    keyConfigured: Boolean = false,
+    accentColor: Color,
+    onCheckedChange: (Boolean) -> Unit,
+    onConfigureKey: (() -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                )
+
+                if (hasApiKey) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = if (keyConfigured) accentColor.copy(alpha = 0.2f) else AmberAccent.copy(alpha = 0.2f)
+                    ) {
+                        Text(
+                            text = if (keyConfigured) "API Configurada" else "Requiere API",
+                            color = if (keyConfigured) accentColor else AmberAccent,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
+                }
+            }
+
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            )
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (hasApiKey && onConfigureKey != null) {
+                IconButton(
+                    onClick = onConfigureKey,
+                    modifier = Modifier.size(34.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Key,
+                        contentDescription = "Configurar Clave API",
+                        tint = if (keyConfigured) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+            }
+
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.Black,
+                    checkedTrackColor = accentColor,
+                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            )
+        }
+    }
+}
+
+enum class ApiKeyTarget(val title: String, val field1Label: String, val field2Label: String? = null) {
+    SPOTIFY("Spotify Web API", "Client ID", "Client Secret"),
+    LASTFM("Last.fm API", "API Key"),
+    DISCOGS("Discogs", "Personal Access Token"),
+    GENIUS("Genius API", "Client Access Token"),
+    MUSIXMATCH("Musixmatch API", "API Key");
+
+    fun getCurrentKey1(settings: com.example.data.storage.AppSettings): String = when (this) {
+        SPOTIFY -> settings.spotifyClientId
+        LASTFM -> settings.lastFmApiKey
+        DISCOGS -> settings.discogsToken
+        GENIUS -> settings.geniusToken
+        MUSIXMATCH -> settings.musixmatchApiKey
+    }
+
+    fun getCurrentKey2(settings: com.example.data.storage.AppSettings): String = when (this) {
+        SPOTIFY -> settings.spotifyClientSecret
+        else -> ""
+    }
+
+    fun save(viewModel: MusicViewModel, key1: String, key2: String) {
+        when (this) {
+            SPOTIFY -> {
+                viewModel.updateApiKey("spotify_id", key1)
+                viewModel.updateApiKey("spotify_secret", key2)
+            }
+            LASTFM -> viewModel.updateApiKey("lastfm", key1)
+            DISCOGS -> viewModel.updateApiKey("discogs", key1)
+            GENIUS -> viewModel.updateApiKey("genius", key1)
+            MUSIXMATCH -> viewModel.updateApiKey("musixmatch", key1)
+        }
+    }
+}
+
+@Composable
+fun ApiKeyConfigDialog(
+    target: ApiKeyTarget,
+    currentKey1: String,
+    currentKey2: String,
+    onSave: (String, String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var val1 by remember { mutableStateOf(currentKey1) }
+    var val2 by remember { mutableStateOf(currentKey2) }
+    val accent = LocalAccentColor.current
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = CardDefaults.outlinedCardBorder().copy(
+                brush = SolidColor(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+            ),
+            modifier = Modifier.fillMaxWidth().padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Configurar ${target.title}",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    )
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Cerrar",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                Text(
+                    text = "Introduce tus credenciales para habilitar búsquedas con esta fuente:",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // Field 1
+                Column {
+                    Text(
+                        text = target.field1Label,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.fillMaxWidth().height(42.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            BasicTextField(
+                                value = val1,
+                                onValueChange = { val1 = it },
+                                textStyle = TextStyle(
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontSize = 13.sp
+                                ),
+                                singleLine = true,
+                                cursorBrush = SolidColor(accent),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+
+                // Optional Field 2
+                if (target.field2Label != null) {
+                    Column {
+                        Text(
+                            text = target.field2Label,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.fillMaxWidth().height(42.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                BasicTextField(
+                                    value = val2,
+                                    onValueChange = { val2 = it },
+                                    textStyle = TextStyle(
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontSize = 13.sp
+                                    ),
+                                    singleLine = true,
+                                    cursorBrush = SolidColor(accent),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancelar", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = { onSave(val1.trim(), val2.trim()) },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = accent,
+                            contentColor = Color.Black
+                        )
+                    ) {
+                        Text("Guardar", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
     }
 }

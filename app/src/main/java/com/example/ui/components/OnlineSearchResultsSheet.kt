@@ -52,6 +52,7 @@ fun OnlineSearchResultsSheet(
     onSelectCandidate: (OnlineCandidate) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val accent = LocalAccentColor.current
     var searchQuery by remember { mutableStateOf(initialQuery) }
     var selectedSourceFilter by remember { mutableStateOf<MetadataSource?>(null) }
     var previewCandidate by remember { mutableStateOf<OnlineCandidate?>(null) }
@@ -141,7 +142,7 @@ fun OnlineSearchResultsSheet(
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = null,
-                            tint = EmeraldAccent,
+                            tint = accent,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -164,7 +165,7 @@ fun OnlineSearchResultsSheet(
                                     fontSize = 13.sp
                                 ),
                                 singleLine = true,
-                                cursorBrush = SolidColor(EmeraldAccent),
+                                cursorBrush = SolidColor(accent),
                                 keyboardOptions = KeyboardOptions(
                                     imeAction = ImeAction.Search
                                 ),
@@ -200,17 +201,17 @@ fun OnlineSearchResultsSheet(
                     modifier = Modifier
                         .size(44.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(if (showAdvancedSearch) EmeraldAccent.copy(alpha = 0.2f) else StudioCardSurface)
+                        .background(if (showAdvancedSearch) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface)
                         .border(
                             width = 1.dp,
-                            color = if (showAdvancedSearch) EmeraldAccent else StudioBorder,
+                            color = if (showAdvancedSearch) accent else MaterialTheme.colorScheme.outline,
                             shape = RoundedCornerShape(12.dp)
                         )
                 ) {
                     Icon(
                         imageVector = Icons.Default.Tune,
                         contentDescription = "Búsqueda avanzada",
-                        tint = if (showAdvancedSearch) EmeraldAccent else StudioTextSecondary,
+                        tint = if (showAdvancedSearch) accent else StudioTextSecondary,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -220,7 +221,7 @@ fun OnlineSearchResultsSheet(
                 Button(
                     onClick = { onSearchQuery(searchQuery) },
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = EmeraldAccent),
+                    colors = ButtonDefaults.buttonColors(containerColor = accent),
                     contentPadding = PaddingValues(horizontal = 14.dp),
                     modifier = Modifier.height(44.dp)
                 ) {
@@ -260,11 +261,11 @@ fun OnlineSearchResultsSheet(
                                 text = "Búsqueda avanzada por campos",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    color = EmeraldAccent
+                                    color = accent
                                 )
                             )
                             Text(
-                                text = "iTunes • Deezer • MB",
+                                text = "iTunes • Deezer • MB • Spotify...",
                                 fontSize = 10.sp,
                                 color = StudioTextMuted
                             )
@@ -328,7 +329,7 @@ fun OnlineSearchResultsSheet(
                                     }
                                 },
                                 shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = EmeraldAccent),
+                                colors = ButtonDefaults.buttonColors(containerColor = accent),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                             ) {
                                 Icon(
@@ -364,40 +365,37 @@ fun OnlineSearchResultsSheet(
                     onClick = { selectedSourceFilter = null },
                     label = { Text("Todas (${candidates.size})") },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = EmeraldAccent,
+                        selectedContainerColor = accent,
                         selectedLabelColor = Color.Black
                     )
                 )
 
-                FilterChip(
-                    selected = selectedSourceFilter == MetadataSource.MUSICBRAINZ,
-                    onClick = { selectedSourceFilter = MetadataSource.MUSICBRAINZ },
-                    label = { Text("MusicBrainz") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = VioletAccent,
-                        selectedLabelColor = Color.White
-                    )
-                )
+                val presentSources = remember(candidates) {
+                    candidates.map { it.source }.distinct()
+                }
 
-                FilterChip(
-                    selected = selectedSourceFilter == MetadataSource.ITUNES,
-                    onClick = { selectedSourceFilter = MetadataSource.ITUNES },
-                    label = { Text("iTunes") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = RoseAccent,
-                        selectedLabelColor = Color.White
+                presentSources.forEach { src ->
+                    val srcColor = when (src) {
+                        MetadataSource.MUSICBRAINZ -> VioletAccent
+                        MetadataSource.ITUNES -> RoseAccent
+                        MetadataSource.DEEZER -> CyanAccent
+                        MetadataSource.THEAUDIODB -> AmberAccent
+                        MetadataSource.NETEASE -> RoseAccent
+                        MetadataSource.SPOTIFY -> EmeraldAccent
+                        MetadataSource.LASTFM -> AmberAccent
+                        MetadataSource.DISCOGS -> CyanAccent
+                        MetadataSource.MANUAL -> accent
+                    }
+                    FilterChip(
+                        selected = selectedSourceFilter == src,
+                        onClick = { selectedSourceFilter = src },
+                        label = { Text(src.displayName) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = srcColor,
+                            selectedLabelColor = Color.White
+                        )
                     )
-                )
-
-                FilterChip(
-                    selected = selectedSourceFilter == MetadataSource.DEEZER,
-                    onClick = { selectedSourceFilter = MetadataSource.DEEZER },
-                    label = { Text("Deezer") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = CyanAccent,
-                        selectedLabelColor = Color.Black
-                    )
-                )
+                }
             }
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -410,10 +408,10 @@ fun OnlineSearchResultsSheet(
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(color = EmeraldAccent)
+                        CircularProgressIndicator(color = accent)
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "Consultando MusicBrainz, iTunes y Deezer...",
+                            text = "Consultando fuentes en línea...",
                             color = StudioTextSecondary,
                             fontSize = 14.sp
                         )
@@ -563,11 +561,17 @@ fun CandidateDetailedCard(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
+                            val accent = LocalAccentColor.current
                             val badgeColor = when (candidate.source) {
                                 MetadataSource.MUSICBRAINZ -> VioletAccent
                                 MetadataSource.ITUNES -> RoseAccent
                                 MetadataSource.DEEZER -> CyanAccent
-                                MetadataSource.MANUAL -> EmeraldAccent
+                                MetadataSource.THEAUDIODB -> AmberAccent
+                                MetadataSource.NETEASE -> RoseAccent
+                                MetadataSource.SPOTIFY -> EmeraldAccent
+                                MetadataSource.LASTFM -> AmberAccent
+                                MetadataSource.DISCOGS -> CyanAccent
+                                MetadataSource.MANUAL -> accent
                             }
                             Surface(
                                 shape = RoundedCornerShape(4.dp),
@@ -585,11 +589,11 @@ fun CandidateDetailedCard(
                             if (candidate.matchScore > 0) {
                                 Surface(
                                     shape = RoundedCornerShape(4.dp),
-                                    color = EmeraldDark.copy(alpha = 0.2f)
+                                    color = accent.copy(alpha = 0.2f)
                                 ) {
                                     Text(
                                         text = "${candidate.matchScore}% Coincidencia",
-                                        color = EmeraldAccent,
+                                        color = accent,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Medium,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -614,7 +618,7 @@ fun CandidateDetailedCard(
                             text = candidate.artist,
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontWeight = FontWeight.SemiBold,
-                                color = EmeraldAccent
+                                color = LocalAccentColor.current
                             ),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -684,7 +688,7 @@ fun CandidateDetailedCard(
                 onClick = onSelect,
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = EmeraldAccent,
+                    containerColor = LocalAccentColor.current,
                     contentColor = Color.Black
                 ),
                 modifier = Modifier
@@ -803,7 +807,7 @@ fun CandidatePreviewDialog(
                     text = candidate.artist,
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.SemiBold,
-                        color = EmeraldAccent
+                        color = LocalAccentColor.current
                     ),
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
@@ -816,11 +820,17 @@ fun CandidatePreviewDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val accent = LocalAccentColor.current
                     val badgeColor = when (candidate.source) {
                         MetadataSource.MUSICBRAINZ -> VioletAccent
                         MetadataSource.ITUNES -> RoseAccent
                         MetadataSource.DEEZER -> CyanAccent
-                        MetadataSource.MANUAL -> EmeraldAccent
+                        MetadataSource.THEAUDIODB -> AmberAccent
+                        MetadataSource.NETEASE -> RoseAccent
+                        MetadataSource.SPOTIFY -> EmeraldAccent
+                        MetadataSource.LASTFM -> AmberAccent
+                        MetadataSource.DISCOGS -> CyanAccent
+                        MetadataSource.MANUAL -> accent
                     }
                     Surface(
                         shape = RoundedCornerShape(6.dp),
@@ -838,11 +848,11 @@ fun CandidatePreviewDialog(
                     if (candidate.matchScore > 0) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = EmeraldDark.copy(alpha = 0.2f)
+                            color = accent.copy(alpha = 0.2f)
                         ) {
                             Text(
                                 text = "${candidate.matchScore}% Coincidencia",
-                                color = EmeraldAccent,
+                                color = accent,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
@@ -899,7 +909,7 @@ fun CandidatePreviewDialog(
                         onClick = onApply,
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = EmeraldAccent,
+                            containerColor = LocalAccentColor.current,
                             contentColor = Color.Black
                         ),
                         modifier = Modifier

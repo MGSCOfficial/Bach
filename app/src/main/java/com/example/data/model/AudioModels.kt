@@ -21,6 +21,11 @@ enum class MetadataSource(val displayName: String) {
     MUSICBRAINZ("MusicBrainz"),
     ITUNES("iTunes"),
     DEEZER("Deezer"),
+    THEAUDIODB("TheAudioDB"),
+    NETEASE("NetEase"),
+    SPOTIFY("Spotify"),
+    LASTFM("Last.fm"),
+    DISCOGS("Discogs"),
     MANUAL("Manual");
 }
 

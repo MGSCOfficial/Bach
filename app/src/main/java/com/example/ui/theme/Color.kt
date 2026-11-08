@@ -1,5 +1,6 @@
 package com.example.ui.theme
 
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 // SonicTag Studio Palette
@@ -14,6 +15,7 @@ val VioletDark = Color(0xFF6D28D9)
 val CyanAccent = Color(0xFF06B6D4)
 val AmberAccent = Color(0xFFF59E0B)
 val RoseAccent = Color(0xFFF43F5E)
+val BlueAccent = Color(0xFF3B82F6)
 
 // Dark Studio Surfaces
 val StudioDarkBg = Color(0xFF0D0F14)
@@ -23,3 +25,12 @@ val StudioBorder = Color(0xFF2C3246)
 val StudioTextPrimary = Color(0xFFF9FAFB)
 val StudioTextSecondary = Color(0xFF9CA3AF)
 val StudioTextMuted = Color(0xFF6B7280)
+
+// Pure AMOLED Dark Surfaces
+val AmoledDarkBg = Color(0xFF000000)
+val AmoledCardSurface = Color(0xFF0A0C10)
+val AmoledCardSurfaceVariant = Color(0xFF12151D)
+val AmoledBorder = Color(0xFF1E222D)
+
+// Dynamic Local Accent Provider
+val LocalAccentColor = staticCompositionLocalOf { EmeraldAccent }

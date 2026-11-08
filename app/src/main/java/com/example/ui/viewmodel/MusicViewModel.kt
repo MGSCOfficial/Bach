@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.model.*
 import com.example.data.remote.LyricsRepository
 import com.example.data.remote.OnlineMetadataRepository
+import com.example.data.storage.AccentColorPreset
 import com.example.data.storage.AppSettings
 import com.example.data.storage.FolderManager
 import com.example.data.storage.SettingsManager
@@ -91,6 +92,16 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         _settings.update { it.copy(dynamicColor = enabled) }
     }
 
+    fun updateAccentPreset(preset: AccentColorPreset) {
+        settingsManager.setAccentPreset(preset)
+        _settings.update { it.copy(accentPreset = preset) }
+    }
+
+    fun updateAmoledDark(enabled: Boolean) {
+        settingsManager.setAmoledDark(enabled)
+        _settings.update { it.copy(amoledDark = enabled) }
+    }
+
     fun updateAutoSearchLyrics(enabled: Boolean) {
         settingsManager.setAutoSearchLyrics(enabled)
         _settings.update { it.copy(autoSearchLyrics = enabled) }
@@ -104,6 +115,16 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun updateDefaultEmbedLyrics(enabled: Boolean) {
         settingsManager.setDefaultEmbedLyrics(enabled)
         _settings.update { it.copy(defaultEmbedLyrics = enabled) }
+    }
+
+    fun updateSourceEnabled(sourceKey: String, enabled: Boolean) {
+        settingsManager.setSourceEnabled(sourceKey, enabled)
+        _settings.value = settingsManager.loadSettings()
+    }
+
+    fun updateApiKey(keyIdentifier: String, value: String) {
+        settingsManager.setApiKey(keyIdentifier, value)
+        _settings.value = settingsManager.loadSettings()
     }
 
     init {
@@ -398,7 +419,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             _editorState.update { it.copy(isSearchingOnline = true, showCandidateSheet = true) }
-            val candidates = onlineRepo.searchAllSources(query)
+            val candidates = onlineRepo.searchAllSources(query, _settings.value)
             _editorState.update {
                 it.copy(
                     isSearchingOnline = false,
@@ -478,7 +499,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 trackName = draft.title,
                 artistName = draft.artist,
                 albumName = draft.album,
-                durationMs = draft.durationMs
+                durationMs = draft.durationMs,
+                settings = _settings.value
             )
 
             _editorState.update { state ->

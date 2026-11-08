@@ -1,12 +1,16 @@
 package com.example.data.remote
 
+import android.util.Base64
 import android.util.Log
 import com.example.data.model.CoverArtOption
 import com.example.data.model.MetadataSource
 import com.example.data.model.OnlineCandidate
+import com.example.data.storage.AppSettings
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
+import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -23,31 +27,55 @@ class OnlineMetadataRepository {
 
     private val userAgent = "SonicTag/1.0.0 ( Android; contact@sonictag.app )"
 
-    suspend fun searchAllSources(query: String): List<OnlineCandidate> = withContext(Dispatchers.IO) {
+    suspend fun searchAllSources(
+        query: String,
+        settings: AppSettings = AppSettings()
+    ): List<OnlineCandidate> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
 
-        val itunesDeferred = async { searchITunes(query) }
-        val musicBrainzDeferred = async { searchMusicBrainz(query) }
-        val deezerDeferred = async { searchDeezer(query) }
+        val tasks = mutableListOf<Deferred<List<OnlineCandidate>>>()
 
-        val itunesList = try { itunesDeferred.await() } catch (e: Exception) {
-            Log.e("OnlineRepository", "iTunes error", e)
-            emptyList()
+        // 1. iTunes (Gratuita)
+        if (settings.sourceITunes) {
+            tasks.add(async { searchITunes(query) })
         }
-        val mbList = try { musicBrainzDeferred.await() } catch (e: Exception) {
-            Log.e("OnlineRepository", "MusicBrainz error", e)
-            emptyList()
+        // 2. Deezer (Gratuita)
+        if (settings.sourceDeezer) {
+            tasks.add(async { searchDeezer(query) })
         }
-        val deezerList = try { deezerDeferred.await() } catch (e: Exception) {
-            Log.e("OnlineRepository", "Deezer error", e)
-            emptyList()
+        // 3. MusicBrainz (Gratuita)
+        if (settings.sourceMusicBrainz) {
+            tasks.add(async { searchMusicBrainz(query) })
+        }
+        // 4. TheAudioDB (Gratuita)
+        if (settings.sourceTheAudioDb) {
+            tasks.add(async { searchTheAudioDb(query) })
+        }
+        // 5. NetEase Music (Gratuita)
+        if (settings.sourceNetEase) {
+            tasks.add(async { searchNetEase(query) })
+        }
+        // 6. Spotify (Requiere Client ID & Secret)
+        if (settings.sourceSpotify && settings.spotifyClientId.isNotBlank() && settings.spotifyClientSecret.isNotBlank()) {
+            tasks.add(async { searchSpotify(query, settings.spotifyClientId, settings.spotifyClientSecret) })
+        }
+        // 7. Last.fm (Requiere API Key)
+        if (settings.sourceLastFm && settings.lastFmApiKey.isNotBlank()) {
+            tasks.add(async { searchLastFm(query, settings.lastFmApiKey) })
+        }
+        // 8. Discogs (Requiere Personal Access Token)
+        if (settings.sourceDiscogs && settings.discogsToken.isNotBlank()) {
+            tasks.add(async { searchDiscogs(query, settings.discogsToken) })
         }
 
-        // Combine and prioritize high match results
         val combined = mutableListOf<OnlineCandidate>()
-        combined.addAll(itunesList)
-        combined.addAll(deezerList)
-        combined.addAll(mbList)
+        for (task in tasks) {
+            try {
+                combined.addAll(task.await())
+            } catch (e: Exception) {
+                Log.w("OnlineRepository", "Task execution error", e)
+            }
+        }
 
         return@withContext combined
     }
@@ -70,43 +98,42 @@ class OnlineMetadataRepository {
 
                 for (i in 0 until items.length()) {
                     val item = items.getJSONObject(i)
-                    val trackName = item.optString("trackName", "")
-                    val artistName = item.optString("artistName", "")
-                    val collectionName = item.optString("collectionName", "")
+                    val title = item.optString("trackName", "")
+                    val artist = item.optString("artistName", "")
+                    val album = item.optString("collectionName", "")
                     val genre = item.optString("primaryGenreName", "")
                     val releaseDate = item.optString("releaseDate", "")
                     val year = if (releaseDate.length >= 4) releaseDate.substring(0, 4) else ""
                     val trackNumber = item.optInt("trackNumber", 0).let { if (it > 0) it.toString() else "" }
                     val discNumber = item.optInt("discNumber", 0).let { if (it > 0) it.toString() else "" }
                     val durationMs = item.optLong("trackTimeMillis", 0L)
-                    val rawArtwork = item.optString("artworkUrl100", "")
-                    // Enhance artwork to 1000x1000
-                    val highResArtwork = if (rawArtwork.isNotBlank()) {
-                        rawArtwork.replace("100x100bb", "1000x1000bb")
+                    val rawArt = item.optString("artworkUrl100", "")
+                    val highResArt = if (rawArt.isNotBlank()) {
+                        rawArt.replace("100x100bb.jpg", "1000x1000bb.jpg")
                     } else null
 
                     results.add(
                         OnlineCandidate(
                             source = MetadataSource.ITUNES,
-                            title = trackName,
-                            artist = artistName,
-                            album = collectionName,
-                            albumArtist = artistName,
+                            title = title,
+                            artist = artist,
+                            album = album,
+                            albumArtist = artist,
                             year = year,
                             genre = genre,
                             trackNumber = trackNumber,
                             discNumber = discNumber,
                             durationMs = durationMs,
-                            coverArtUrl = highResArtwork,
-                            matchScore = 95 - (i * 2)
+                            coverArtUrl = highResArt,
+                            matchScore = 95
                         )
                     )
                 }
             }
         } catch (e: Exception) {
-            Log.e("OnlineRepository", "Failed iTunes search for: $query", e)
+            Log.e("OnlineRepository", "iTunes query error", e)
         }
-        results
+        return@withContext results
     }
 
     suspend fun searchDeezer(query: String): List<OnlineCandidate> = withContext(Dispatchers.IO) {
@@ -148,22 +175,22 @@ class OnlineMetadataRepository {
                             artist = artistName,
                             album = albumTitle,
                             albumArtist = artistName,
-                            durationMs = durationSec * 1000,
+                            durationMs = durationSec * 1000L,
                             coverArtUrl = bestCover,
-                            matchScore = 92 - (i * 2)
+                            matchScore = 93
                         )
                     )
                 }
             }
         } catch (e: Exception) {
-            Log.e("OnlineRepository", "Failed Deezer search for: $query", e)
+            Log.e("OnlineRepository", "Deezer query error", e)
         }
-        results
+        return@withContext results
     }
 
     suspend fun searchMusicBrainz(query: String): List<OnlineCandidate> = withContext(Dispatchers.IO) {
         val encoded = URLEncoder.encode(query, "UTF-8")
-        val url = "https://musicbrainz.org/ws/2/recording?query=$encoded&fmt=json&limit=15"
+        val url = "https://musicbrainz.org/ws/2/recording?query=$encoded&fmt=json&limit=10"
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", userAgent)
@@ -225,94 +252,287 @@ class OnlineMetadataRepository {
                 }
             }
         } catch (e: Exception) {
-            Log.e("OnlineRepository", "Failed MusicBrainz search for: $query", e)
+            Log.e("OnlineRepository", "MusicBrainz query error", e)
         }
-        results
+        return@withContext results
     }
 
-    suspend fun fetchCoverArtOptions(
-        candidate: OnlineCandidate
-    ): List<CoverArtOption> = withContext(Dispatchers.IO) {
+    suspend fun searchTheAudioDb(query: String): List<OnlineCandidate> = withContext(Dispatchers.IO) {
+        val encoded = URLEncoder.encode(query, "UTF-8")
+        val url = "https://www.theaudiodb.com/api/v1/json/2/searchtrack.php?s=&t=$encoded"
+        val request = Request.Builder().url(url).header("User-Agent", userAgent).build()
+        val results = mutableListOf<OnlineCandidate>()
+        try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext emptyList()
+                val body = response.body?.string() ?: return@withContext emptyList()
+                val root = JSONObject(body)
+                val tracks = root.optJSONArray("track") ?: return@withContext emptyList()
+                for (i in 0 until minOf(tracks.length(), 10)) {
+                    val t = tracks.getJSONObject(i)
+                    val title = t.optString("strTrack", "")
+                    val artist = t.optString("strArtist", "")
+                    val album = t.optString("strAlbum", "")
+                    val genre = t.optString("strGenre", "")
+                    val trackNum = t.optString("intTrackNumber", "")
+                    val thumb = t.optString("strTrackThumb", "").ifBlank { null }
+                    results.add(
+                        OnlineCandidate(
+                            source = MetadataSource.THEAUDIODB,
+                            title = title,
+                            artist = artist,
+                            album = album,
+                            genre = genre,
+                            trackNumber = trackNum,
+                            coverArtUrl = thumb,
+                            matchScore = 88
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("OnlineRepository", "TheAudioDB query failed", e)
+        }
+        return@withContext results
+    }
+
+    suspend fun searchNetEase(query: String): List<OnlineCandidate> = withContext(Dispatchers.IO) {
+        val encoded = URLEncoder.encode(query, "UTF-8")
+        val url = "https://music.163.com/api/search/get/web?csrf_token=&hlpretag=&hlposttag=&s=$encoded&type=1&offset=0&total=true&limit=10"
+        val request = Request.Builder().url(url).header("User-Agent", userAgent).build()
+        val results = mutableListOf<OnlineCandidate>()
+        try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext emptyList()
+                val body = response.body?.string() ?: return@withContext emptyList()
+                val root = JSONObject(body)
+                val songs = root.optJSONObject("result")?.optJSONArray("songs") ?: return@withContext emptyList()
+                for (i in 0 until songs.length()) {
+                    val s = songs.getJSONObject(i)
+                    val title = s.optString("name", "")
+                    val artists = s.optJSONArray("artists")
+                    val artistName = if (artists != null && artists.length() > 0) artists.getJSONObject(0).optString("name", "") else ""
+                    val albumObj = s.optJSONObject("album")
+                    val albumName = albumObj?.optString("name", "") ?: ""
+                    val picUrl = albumObj?.optString("picUrl", "")?.ifBlank { null }
+                    val duration = s.optLong("duration", 0L)
+                    results.add(
+                        OnlineCandidate(
+                            source = MetadataSource.NETEASE,
+                            title = title,
+                            artist = artistName,
+                            album = albumName,
+                            coverArtUrl = picUrl,
+                            durationMs = duration,
+                            matchScore = 86
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("OnlineRepository", "NetEase query failed", e)
+        }
+        return@withContext results
+    }
+
+    suspend fun searchSpotify(query: String, clientId: String, clientSecret: String): List<OnlineCandidate> = withContext(Dispatchers.IO) {
+        val results = mutableListOf<OnlineCandidate>()
+        try {
+            // 1. Get Access Token
+            val authHeader = "Basic " + Base64.encodeToString("$clientId:$clientSecret".toByteArray(), Base64.NO_WRAP)
+            val tokenReqBody = FormBody.Builder().add("grant_type", "client_credentials").build()
+            val tokenReq = Request.Builder()
+                .url("https://accounts.spotify.com/api/token")
+                .header("Authorization", authHeader)
+                .post(tokenReqBody)
+                .build()
+
+            var token = ""
+            client.newCall(tokenReq).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext emptyList()
+                val root = JSONObject(resp.body?.string() ?: return@withContext emptyList())
+                token = root.optString("access_token", "")
+            }
+
+            if (token.isBlank()) return@withContext emptyList()
+
+            // 2. Search Tracks
+            val encoded = URLEncoder.encode(query, "UTF-8")
+            val searchUrl = "https://api.spotify.com/v1/search?q=$encoded&type=track&limit=10"
+            val searchReq = Request.Builder()
+                .url(searchUrl)
+                .header("Authorization", "Bearer $token")
+                .build()
+
+            client.newCall(searchReq).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext emptyList()
+                val root = JSONObject(resp.body?.string() ?: return@withContext emptyList())
+                val items = root.optJSONObject("tracks")?.optJSONArray("items") ?: return@withContext emptyList()
+                for (i in 0 until items.length()) {
+                    val item = items.getJSONObject(i)
+                    val title = item.optString("name", "")
+                    val artists = item.optJSONArray("artists")
+                    val artistName = if (artists != null && artists.length() > 0) artists.getJSONObject(0).optString("name", "") else ""
+                    val albumObj = item.optJSONObject("album")
+                    val albumName = albumObj?.optString("name", "") ?: ""
+                    val releaseDate = albumObj?.optString("release_date", "") ?: ""
+                    val year = if (releaseDate.length >= 4) releaseDate.substring(0, 4) else ""
+                    val images = albumObj?.optJSONArray("images")
+                    val cover = if (images != null && images.length() > 0) images.getJSONObject(0).optString("url", null) else null
+                    val trackNum = item.optInt("track_number", 0).let { if (it > 0) it.toString() else "" }
+                    val duration = item.optLong("duration_ms", 0L)
+
+                    results.add(
+                        OnlineCandidate(
+                            source = MetadataSource.SPOTIFY,
+                            title = title,
+                            artist = artistName,
+                            album = albumName,
+                            year = year,
+                            trackNumber = trackNum,
+                            coverArtUrl = cover,
+                            durationMs = duration,
+                            matchScore = 98
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("OnlineRepository", "Spotify query failed", e)
+        }
+        return@withContext results
+    }
+
+    suspend fun searchLastFm(query: String, apiKey: String): List<OnlineCandidate> = withContext(Dispatchers.IO) {
+        val encoded = URLEncoder.encode(query, "UTF-8")
+        val url = "https://ws.audioscrobbler.com/2.0/?method=track.search&track=$encoded&api_key=$apiKey&format=json&limit=10"
+        val request = Request.Builder().url(url).header("User-Agent", userAgent).build()
+        val results = mutableListOf<OnlineCandidate>()
+        try {
+            client.newCall(request).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext emptyList()
+                val root = JSONObject(resp.body?.string() ?: return@withContext emptyList())
+                val trackList = root.optJSONObject("results")?.optJSONObject("trackmatches")?.optJSONArray("track") ?: return@withContext emptyList()
+                for (i in 0 until trackList.length()) {
+                    val t = trackList.getJSONObject(i)
+                    val title = t.optString("name", "")
+                    val artist = t.optString("artist", "")
+                    val images = t.optJSONArray("image")
+                    var cover: String? = null
+                    if (images != null) {
+                        for (j in 0 until images.length()) {
+                            val img = images.getJSONObject(j)
+                            val size = img.optString("size", "")
+                            if (size == "extralarge" || size == "large") {
+                                cover = img.optString("#text", null)
+                            }
+                        }
+                    }
+                    results.add(
+                        OnlineCandidate(
+                            source = MetadataSource.LASTFM,
+                            title = title,
+                            artist = artist,
+                            album = "",
+                            coverArtUrl = cover?.ifBlank { null },
+                            matchScore = 85
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("OnlineRepository", "Last.fm query failed", e)
+        }
+        return@withContext results
+    }
+
+    suspend fun searchDiscogs(query: String, token: String): List<OnlineCandidate> = withContext(Dispatchers.IO) {
+        val encoded = URLEncoder.encode(query, "UTF-8")
+        val url = "https://api.discogs.com/database/search?q=$encoded&type=release&token=$token&per_page=10"
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", userAgent)
+            .build()
+        val results = mutableListOf<OnlineCandidate>()
+        try {
+            client.newCall(request).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext emptyList()
+                val root = JSONObject(resp.body?.string() ?: return@withContext emptyList())
+                val list = root.optJSONArray("results") ?: return@withContext emptyList()
+                for (i in 0 until list.length()) {
+                    val item = list.getJSONObject(i)
+                    val rawTitle = item.optString("title", "")
+                    val parts = rawTitle.split(" - ")
+                    val artist = if (parts.size > 1) parts[0].trim() else ""
+                    val title = if (parts.size > 1) parts.drop(1).joinToString(" - ").trim() else rawTitle
+                    val year = item.optString("year", "")
+                    val cover = item.optString("cover_image", "").ifBlank { null }
+                    val genreArr = item.optJSONArray("genre")
+                    val genre = if (genreArr != null && genreArr.length() > 0) genreArr.getString(0) else ""
+
+                    results.add(
+                        OnlineCandidate(
+                            source = MetadataSource.DISCOGS,
+                            title = title,
+                            artist = artist,
+                            album = title,
+                            year = year,
+                            genre = genre,
+                            coverArtUrl = cover,
+                            matchScore = 87
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("OnlineRepository", "Discogs query failed", e)
+        }
+        return@withContext results
+    }
+
+    suspend fun fetchCoverArtOptions(candidate: OnlineCandidate): List<CoverArtOption> = withContext(Dispatchers.IO) {
         val options = mutableListOf<CoverArtOption>()
 
-        // 1. If candidate already has cover url (iTunes or Deezer)
+        // 1. Direct candidate cover art
         if (!candidate.coverArtUrl.isNullOrBlank()) {
-            val srcName = candidate.source.displayName
             options.add(
                 CoverArtOption(
-                    source = "$srcName Ultra HD",
+                    source = candidate.source.displayName,
                     url = candidate.coverArtUrl,
                     width = 1000,
                     height = 1000,
-                    label = "$srcName Original (1000x1000)",
+                    label = "Carátula de ${candidate.source.displayName}",
                     isSelected = true
                 )
             )
-            // If it's iTunes, also add 600px version
-            if (candidate.source == MetadataSource.ITUNES) {
-                val mediumUrl = candidate.coverArtUrl.replace("1000x1000bb", "600x600bb")
-                options.add(
-                    CoverArtOption(
-                        source = "iTunes HD",
-                        url = mediumUrl,
-                        width = 600,
-                        height = 600,
-                        label = "iTunes Standard (600x600)",
-                        isSelected = false
-                    )
-                )
-            }
         }
 
-        // 2. Query Cover Art Archive if we have a releaseMbid or if candidate is MusicBrainz
+        // 2. Cover Art Archive for MusicBrainz
         val relMbid = candidate.releaseMbid
         if (!relMbid.isNullOrBlank()) {
+            val caaUrl = "https://coverartarchive.org/release/$relMbid"
+            val caaRequest = Request.Builder().url(caaUrl).header("User-Agent", userAgent).build()
             try {
-                val caaUrl = "https://coverartarchive.org/release/$relMbid"
-                val request = Request.Builder()
-                    .url(caaUrl)
-                    .header("User-Agent", userAgent)
-                    .build()
-
-                client.newCall(request).execute().use { response ->
+                client.newCall(caaRequest).execute().use { response ->
                     if (response.isSuccessful) {
                         val body = response.body?.string()
                         if (body != null) {
-                            val root = JSONObject(body)
-                            val images = root.optJSONArray("images")
+                            val caaRoot = JSONObject(body)
+                            val images = caaRoot.optJSONArray("images")
                             if (images != null) {
                                 for (i in 0 until images.length()) {
                                     val img = images.getJSONObject(i)
+                                    val imgUrl = img.optString("image", "")
                                     val isFront = img.optBoolean("front", false)
-                                    val originalUrl = img.optString("image", "")
-                                    val thumbs = img.optJSONObject("thumbnails")
-                                    val url1200 = if (thumbs != null && thumbs.has("1200")) thumbs.getString("1200") else null
-                                    val url500 = if (thumbs != null && thumbs.has("500")) thumbs.getString("500") else null
-
-                                    if (isFront && originalUrl.isNotBlank()) {
+                                    if (imgUrl.isNotBlank()) {
                                         options.add(
                                             CoverArtOption(
                                                 source = "Cover Art Archive",
-                                                url = url1200 ?: originalUrl,
-                                                width = 1200,
-                                                height = 1200,
-                                                label = "Cover Art Archive Front (1200px)",
+                                                url = imgUrl,
+                                                label = if (isFront) "Portada Oficial (CAA Front)" else "CAA Imagen #$i",
                                                 isSelected = options.isEmpty()
                                             )
                                         )
-                                        if (url500 != null) {
-                                            options.add(
-                                                CoverArtOption(
-                                                    source = "Cover Art Archive",
-                                                    url = url500,
-                                                    width = 500,
-                                                    height = 500,
-                                                    label = "Cover Art Archive Medium (500px)",
-                                                    isSelected = false
-                                                )
-                                            )
-                                        }
-                                        break
                                     }
                                 }
                             }

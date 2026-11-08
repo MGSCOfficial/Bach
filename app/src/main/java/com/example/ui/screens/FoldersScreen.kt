@@ -14,6 +14,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.AudioTrack
 import com.example.data.model.MusicFolder
+import com.example.data.model.SortOrder
 import com.example.ui.components.TrackCard
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.MusicViewModel
@@ -46,6 +48,8 @@ fun FoldersScreen(
     val playerState by viewModel.audioPlayer.playerState.collectAsStateWithLifecycle()
     var selectedFolder by remember { mutableStateOf<MusicFolder?>(null) }
     var folderSearchQuery by remember { mutableStateOf("") }
+    var folderSortOrder by remember { mutableStateOf(SortOrder.RECENTLY_MODIFIED) }
+    var showFolderSortMenu by remember { mutableStateOf(false) }
 
     val folderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -119,7 +123,7 @@ fun FoldersScreen(
                             Icon(
                                 imageVector = Icons.Default.CreateNewFolder,
                                 contentDescription = "Añadir carpeta",
-                                tint = EmeraldAccent
+                                tint = LocalAccentColor.current
                             )
                         }
                         IconButton(onClick = { viewModel.rescanSavedFolders() }) {
@@ -165,7 +169,7 @@ fun FoldersScreen(
                                 Icon(
                                     imageVector = Icons.Default.FolderOpen,
                                     contentDescription = null,
-                                    tint = EmeraldAccent,
+                                    tint = LocalAccentColor.current,
                                     modifier = Modifier.size(48.dp)
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
@@ -183,7 +187,7 @@ fun FoldersScreen(
                                 Spacer(modifier = Modifier.height(16.dp))
                                 Button(
                                     onClick = { folderPickerLauncher.launch(null) },
-                                    colors = ButtonDefaults.buttonColors(containerColor = EmeraldAccent),
+                                    colors = ButtonDefaults.buttonColors(containerColor = LocalAccentColor.current, contentColor = Color.Black),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
                                     Icon(Icons.Default.Add, contentDescription = null, tint = Color.Black)
@@ -230,13 +234,13 @@ fun FoldersScreen(
                                         modifier = Modifier
                                             .size(44.dp)
                                             .clip(RoundedCornerShape(10.dp))
-                                            .background(EmeraldDark.copy(alpha = 0.15f)),
+                                            .background(LocalAccentColor.current.copy(alpha = 0.15f)),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Folder,
                                             contentDescription = null,
-                                            tint = EmeraldAccent,
+                                            tint = LocalAccentColor.current,
                                             modifier = Modifier.size(26.dp)
                                         )
                                     }
@@ -276,12 +280,12 @@ fun FoldersScreen(
             } else {
                 // ==================== NIVEL 2: DRILL-DOWN EN LA CARPETA SELECCIONADA ====================
                 val currentFolder = selectedFolder!!
-                val folderTracks = remember(libraryState.tracks, currentFolder, folderSearchQuery) {
+                val folderTracks = remember(libraryState.tracks, currentFolder, folderSearchQuery, folderSortOrder) {
                     val matching = libraryState.tracks.filter {
                         it.treeUriString == currentFolder.uriString ||
                                 (it.parentFolderUri != null && it.parentFolderUri!!.contains(currentFolder.displayName, ignoreCase = true))
                     }
-                    if (folderSearchQuery.isBlank()) matching
+                    val filtered = if (folderSearchQuery.isBlank()) matching
                     else {
                         val q = folderSearchQuery.trim().lowercase()
                         matching.filter {
@@ -290,6 +294,16 @@ fun FoldersScreen(
                                     it.fileName.lowercase().contains(q)
                         }
                     }
+                    when (folderSortOrder) {
+                        SortOrder.RECENTLY_MODIFIED -> filtered.sortedByDescending { it.dateModified }
+                        SortOrder.TITLE_ASC -> filtered.sortedBy { it.displayTitle.lowercase() }
+                        SortOrder.TITLE_DESC -> filtered.sortedByDescending { it.displayTitle.lowercase() }
+                        SortOrder.ARTIST_ASC -> filtered.sortedBy { it.displayArtist.lowercase() }
+                        SortOrder.ALBUM_ASC -> filtered.sortedBy { it.displayAlbum.lowercase() }
+                        SortOrder.DURATION_DESC -> filtered.sortedByDescending { it.durationMs }
+                        SortOrder.DURATION_ASC -> filtered.sortedBy { it.durationMs }
+                        SortOrder.SIZE_DESC -> filtered.sortedByDescending { it.sizeBytes }
+                    }
                 }
 
                 Column(
@@ -297,60 +311,127 @@ fun FoldersScreen(
                         .fillMaxSize()
                         .padding(horizontal = 16.dp)
                 ) {
-                    // Search inside folder
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(44.dp)
+                    // Search and Sort inside folder
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surface,
                             modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .weight(1f)
+                                .height(44.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Box(
-                                modifier = Modifier.weight(1f),
-                                contentAlignment = Alignment.CenterStart
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                if (folderSearchQuery.isEmpty()) {
-                                    Text(
-                                        text = "Buscar en esta carpeta...",
-                                        fontSize = 13.sp,
-                                        color = StudioTextMuted
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier.weight(1f),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    if (folderSearchQuery.isEmpty()) {
+                                        Text(
+                                            text = "Buscar en esta carpeta...",
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                    BasicTextField(
+                                        value = folderSearchQuery,
+                                        onValueChange = { folderSearchQuery = it },
+                                        textStyle = TextStyle(
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontSize = 13.sp
+                                        ),
+                                        singleLine = true,
+                                        cursorBrush = SolidColor(LocalAccentColor.current),
+                                        modifier = Modifier.fillMaxWidth()
                                     )
                                 }
-                                BasicTextField(
-                                    value = folderSearchQuery,
-                                    onValueChange = { folderSearchQuery = it },
-                                    textStyle = TextStyle(
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        fontSize = 13.sp
-                                    ),
-                                    singleLine = true,
-                                    cursorBrush = SolidColor(EmeraldAccent),
-                                    modifier = Modifier.fillMaxWidth()
+                                if (folderSearchQuery.isNotEmpty()) {
+                                    IconButton(
+                                        onClick = { folderSearchQuery = "" },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Clear,
+                                            contentDescription = "Limpiar",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // Sort Button and Dropdown Menu
+                        Box {
+                            IconButton(
+                                onClick = { showFolderSortMenu = true },
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surface)
+                                    .testTag("btn_folder_sort_menu")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Sort,
+                                    contentDescription = "Ordenar canciones de la carpeta",
+                                    tint = LocalAccentColor.current,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
-                            if (folderSearchQuery.isNotEmpty()) {
-                                IconButton(
-                                    onClick = { folderSearchQuery = "" },
-                                    modifier = Modifier.size(24.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Clear,
-                                        contentDescription = "Limpiar",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(16.dp)
+
+                            DropdownMenu(
+                                expanded = showFolderSortMenu,
+                                onDismissRequest = { showFolderSortMenu = false },
+                                modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                Text(
+                                    text = "Ordenar por:",
+                                    style = MaterialTheme.typography.labelSmall.copy(color = LocalAccentColor.current, fontWeight = FontWeight.Bold),
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                                )
+
+                                SortOrder.values().forEach { order ->
+                                    val isSelected = folderSortOrder == order
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = order.label,
+                                                    color = if (isSelected) LocalAccentColor.current else MaterialTheme.colorScheme.onSurface,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                    fontSize = 13.sp
+                                                )
+                                                if (isSelected) {
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Icon(
+                                                        imageVector = Icons.Default.Check,
+                                                        contentDescription = null,
+                                                        tint = LocalAccentColor.current,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        onClick = {
+                                            folderSortOrder = order
+                                            showFolderSortMenu = false
+                                        }
                                     )
                                 }
                             }

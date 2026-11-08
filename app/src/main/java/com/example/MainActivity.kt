@@ -30,6 +30,7 @@ import com.example.ui.screens.LibraryScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.SongEditorScreen
 import com.example.ui.theme.EmeraldAccent
+import com.example.ui.theme.LocalAccentColor
 import com.example.ui.theme.SonicTagTheme
 import com.example.ui.viewmodel.MusicViewModel
 
@@ -60,7 +61,9 @@ class MainActivity : ComponentActivity() {
 
             SonicTagTheme(
                 themeMode = settings.themeMode,
-                dynamicColor = settings.dynamicColor
+                dynamicColor = settings.dynamicColor,
+                accentPreset = settings.accentPreset,
+                amoledDark = settings.amoledDark
             ) {
                 var currentScreen by remember { mutableStateOf<AppScreen>(AppScreen.Main) }
                 var currentTab by remember { mutableStateOf(MainTab.SONGS) }
@@ -122,8 +125,8 @@ class MainActivity : ComponentActivity() {
                                                         },
                                                         colors = NavigationBarItemDefaults.colors(
                                                             selectedIconColor = Color.Black,
-                                                            selectedTextColor = EmeraldAccent,
-                                                            indicatorColor = EmeraldAccent,
+                                                            selectedTextColor = LocalAccentColor.current,
+                                                            indicatorColor = LocalAccentColor.current,
                                                             unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                                             unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                                                         )

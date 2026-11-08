@@ -84,7 +84,7 @@ fun LibraryScreen(
         modifier = modifier
             .fillMaxSize()
             .testTag("library_screen"),
-        containerColor = StudioDarkBg,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
@@ -95,7 +95,7 @@ fun LibraryScreen(
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(
                                     Brush.linearGradient(
-                                        listOf(EmeraldAccent, VioletAccent)
+                                        listOf(LocalAccentColor.current, VioletAccent)
                                     )
                                 ),
                             contentAlignment = Alignment.Center
@@ -112,37 +112,12 @@ fun LibraryScreen(
                             text = "Sound ID",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = StudioTextPrimary
+                                color = MaterialTheme.colorScheme.onBackground
                             )
                         )
                     }
                 },
                 actions = {
-                    // Folder manager button with badge
-                    IconButton(
-                        onClick = { showFolderManagerSheet = true },
-                        modifier = Modifier.testTag("btn_manage_folders")
-                    ) {
-                        BadgedBox(
-                            badge = {
-                                if (libraryState.folders.isNotEmpty()) {
-                                    Badge(
-                                        containerColor = EmeraldAccent,
-                                        contentColor = Color.Black
-                                    ) {
-                                        Text("${libraryState.folders.size}", fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Folder,
-                                contentDescription = "Carpetas de música",
-                                tint = StudioTextSecondary
-                            )
-                        }
-                    }
-
                     // Manual rescan button
                     IconButton(
                         onClick = { viewModel.rescanSavedFolders() },
@@ -151,25 +126,12 @@ fun LibraryScreen(
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "Re-escanear carpetas",
-                            tint = StudioTextSecondary
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = StudioDarkBg)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { folderPickerLauncher.launch(null) },
-                containerColor = EmeraldAccent,
-                contentColor = Color.Black,
-                shape = CircleShape,
-                modifier = Modifier
-                    .padding(bottom = 16.dp)
-                    .testTag("fab_add_folder")
-            ) {
-                Icon(Icons.Default.CreateNewFolder, contentDescription = "Añadir carpeta de música")
-            }
         }
     ) { paddingValues ->
         Column(
@@ -178,57 +140,14 @@ fun LibraryScreen(
                 .padding(paddingValues)
                 .padding(horizontal = 16.dp)
         ) {
-            // 1. Sleek Folder Summary Bar (only when folders exist)
-            if (libraryState.folders.isNotEmpty()) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = StudioCardSurface,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showFolderManagerSheet = true }
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.FolderOpen,
-                                contentDescription = null,
-                                tint = EmeraldAccent,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "${libraryState.folders.size} carpetas vinculadas (${libraryState.tracks.size} canciones)",
-                                color = StudioTextSecondary,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                        Text(
-                            text = "Gestionar ▾",
-                            color = EmeraldAccent,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            // 2. Compact Search Field + Sort Button Row
+            // 1. Compact Search Field + Sort Button Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = StudioCardSurface,
+                    color = MaterialTheme.colorScheme.surface,
                     modifier = Modifier
                         .weight(1f)
                         .height(44.dp)
@@ -242,7 +161,7 @@ fun LibraryScreen(
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = null,
-                            tint = StudioTextSecondary,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -254,18 +173,18 @@ fun LibraryScreen(
                                 Text(
                                     text = "Buscar canción, artista o álbum...",
                                     fontSize = 13.sp,
-                                    color = StudioTextMuted
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                 )
                             }
                             BasicTextField(
                                 value = libraryState.searchQuery,
                                 onValueChange = { viewModel.onSearchQueryChanged(it) },
                                 textStyle = TextStyle(
-                                    color = StudioTextPrimary,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     fontSize = 13.sp
                                 ),
                                 singleLine = true,
-                                cursorBrush = SolidColor(EmeraldAccent),
+                                cursorBrush = SolidColor(LocalAccentColor.current),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("library_search_input")
@@ -279,7 +198,7 @@ fun LibraryScreen(
                                 Icon(
                                     imageVector = Icons.Default.Clear,
                                     contentDescription = "Limpiar",
-                                    tint = StudioTextSecondary,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -296,13 +215,13 @@ fun LibraryScreen(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(StudioCardSurface)
+                            .background(MaterialTheme.colorScheme.surface)
                             .testTag("btn_sort_menu")
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Sort,
                             contentDescription = "Ordenar canciones",
-                            tint = EmeraldAccent,
+                            tint = LocalAccentColor.current,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -310,11 +229,11 @@ fun LibraryScreen(
                     DropdownMenu(
                         expanded = showSortMenu,
                         onDismissRequest = { showSortMenu = false },
-                        modifier = Modifier.background(StudioCardSurfaceVariant)
+                        modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Text(
                             text = "Ordenar por:",
-                            style = MaterialTheme.typography.labelSmall.copy(color = EmeraldAccent, fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.labelSmall.copy(color = LocalAccentColor.current, fontWeight = FontWeight.Bold),
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                         )
 
@@ -325,7 +244,7 @@ fun LibraryScreen(
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
                                             text = order.label,
-                                            color = if (isSelected) EmeraldAccent else StudioTextPrimary,
+                                            color = if (isSelected) LocalAccentColor.current else MaterialTheme.colorScheme.onSurface,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                             fontSize = 13.sp
                                         )
@@ -334,7 +253,7 @@ fun LibraryScreen(
                                             Icon(
                                                 imageVector = Icons.Default.Check,
                                                 contentDescription = null,
-                                                tint = EmeraldAccent,
+                                                tint = LocalAccentColor.current,
                                                 modifier = Modifier.size(16.dp)
                                             )
                                         }
@@ -352,7 +271,7 @@ fun LibraryScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 3. Compact Filter Chips Row
+            // 2. Compact Filter Chips Row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -368,7 +287,7 @@ fun LibraryScreen(
                     }
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = if (isSelected) EmeraldAccent else StudioCardSurface,
+                        color = if (isSelected) LocalAccentColor.current else MaterialTheme.colorScheme.surface,
                         modifier = Modifier
                             .height(28.dp)
                             .clickable { viewModel.onFilterChanged(filter) }
@@ -379,7 +298,7 @@ fun LibraryScreen(
                         ) {
                             Text(
                                 text = labelText,
-                                color = if (isSelected) Color.Black else StudioTextSecondary,
+                                color = if (isSelected) Color.Black else MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 11.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                             )
@@ -399,9 +318,9 @@ fun LibraryScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(color = EmeraldAccent)
+                        CircularProgressIndicator(color = LocalAccentColor.current)
                         Spacer(modifier = Modifier.height(12.dp))
-                        Text(text = "Cargando música...", color = StudioTextSecondary, fontSize = 13.sp)
+                        Text(text = "Cargando música...", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                     }
                 }
             } else if (libraryState.folders.isEmpty()) {
@@ -417,8 +336,8 @@ fun LibraryScreen(
                             .fillMaxWidth(0.92f)
                             .testTag("empty_state_no_folders_card"),
                         shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = StudioCardSurface),
-                        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(StudioBorder))
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))
                     ) {
                         Column(
                             modifier = Modifier.padding(24.dp),
@@ -428,13 +347,13 @@ fun LibraryScreen(
                                 modifier = Modifier
                                     .size(64.dp)
                                     .clip(CircleShape)
-                                    .background(EmeraldDark.copy(alpha = 0.2f)),
+                                    .background(LocalAccentColor.current.copy(alpha = 0.15f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.FolderSpecial,
                                     contentDescription = null,
-                                    tint = EmeraldAccent,
+                                    tint = LocalAccentColor.current,
                                     modifier = Modifier.size(36.dp)
                                 )
                             }
@@ -445,7 +364,7 @@ fun LibraryScreen(
                                 text = "Selecciona una Carpeta con Música",
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.Bold,
-                                    color = StudioTextPrimary
+                                    color = MaterialTheme.colorScheme.onSurface
                                 ),
                                 textAlign = TextAlign.Center
                             )
@@ -453,8 +372,8 @@ fun LibraryScreen(
                             Spacer(modifier = Modifier.height(8.dp))
 
                             Text(
-                                text = "Elige la carpeta donde guardas tus canciones MP3 o M4A. Sound ID detectará los archivos en menos de 2 segundos y te permitirá editar carátulas y metadatos con facilidad.",
-                                style = MaterialTheme.typography.bodySmall.copy(color = StudioTextSecondary),
+                                text = "Elige la carpeta donde guardas tus canciones MP3 o M4A. Sound ID detectará los archivos rápidamente y te permitirá editar carátulas y metadatos con facilidad.",
+                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                                 textAlign = TextAlign.Center
                             )
 
@@ -463,7 +382,7 @@ fun LibraryScreen(
                             Button(
                                 onClick = { folderPickerLauncher.launch(null) },
                                 shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = EmeraldAccent),
+                                colors = ButtonDefaults.buttonColors(containerColor = LocalAccentColor.current, contentColor = Color.Black),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("btn_select_music_folder_cta")
@@ -532,7 +451,7 @@ fun FolderManagerBottomSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = StudioDarkBg,
+        containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 16.dp
     ) {
         Column(
@@ -550,11 +469,11 @@ fun FolderManagerBottomSheet(
                     text = "Carpetas de Música Vinculadas",
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
-                        color = StudioTextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 )
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = StudioTextSecondary)
+                    Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
@@ -563,7 +482,7 @@ fun FolderManagerBottomSheet(
             if (folders.isEmpty()) {
                 Text(
                     text = "No hay carpetas vinculadas.",
-                    color = StudioTextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 13.sp
                 )
             } else {
@@ -573,8 +492,8 @@ fun FolderManagerBottomSheet(
                             .fillMaxWidth()
                             .padding(vertical = 4.dp),
                         shape = RoundedCornerShape(10.dp),
-                        color = StudioCardSurface,
-                        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(StudioBorder))
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))
                     ) {
                         Row(
                             modifier = Modifier
@@ -582,18 +501,18 @@ fun FolderManagerBottomSheet(
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Folder, contentDescription = null, tint = EmeraldAccent, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Default.Folder, contentDescription = null, tint = LocalAccentColor.current, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(10.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = folder.displayName,
-                                    color = StudioTextPrimary,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 14.sp
                                 )
                                 Text(
                                     text = "${folder.trackCount} canciones",
-                                    color = StudioTextSecondary,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 12.sp
                                 )
                             }
@@ -623,7 +542,7 @@ fun FolderManagerBottomSheet(
                     onClick = onRescan,
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = StudioTextPrimary)
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
                 ) {
                     Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
@@ -637,7 +556,7 @@ fun FolderManagerBottomSheet(
                     },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = EmeraldAccent, contentColor = Color.Black)
+                    colors = ButtonDefaults.buttonColors(containerColor = LocalAccentColor.current, contentColor = Color.Black)
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))

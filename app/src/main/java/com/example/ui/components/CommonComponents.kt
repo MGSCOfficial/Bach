@@ -104,13 +104,13 @@ fun TrackCard(
             .clickable(onClick = onTrackClick),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = StudioCardSurface
+            containerColor = MaterialTheme.colorScheme.surface
         ),
         border = CardDefaults.outlinedCardBorder().copy(
             brush = Brush.horizontalGradient(
                 listOf(
-                    if (isPlaying) EmeraldAccent.copy(alpha = 0.6f) else StudioBorder,
-                    StudioBorder
+                    if (isPlaying) LocalAccentColor.current.copy(alpha = 0.6f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
                 )
             )
         )
@@ -126,7 +126,7 @@ fun TrackCard(
                 modifier = Modifier
                     .size(58.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(StudioCardSurfaceVariant),
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
                 AudioCoverThumbnail(
@@ -163,7 +163,7 @@ fun TrackCard(
                     text = track.displayTitle,
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.SemiBold,
-                        color = StudioTextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -174,7 +174,7 @@ fun TrackCard(
                 Text(
                     text = "${track.displayArtist} • ${track.displayAlbum}",
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        color = StudioTextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -190,7 +190,7 @@ fun TrackCard(
                     if (track.isComplete) {
                         StatusChip(
                             label = "Completo",
-                            color = EmeraldAccent,
+                            color = LocalAccentColor.current,
                             icon = Icons.Default.CheckCircle
                         )
                     } else if (!track.hasCover) {
@@ -219,7 +219,7 @@ fun TrackCard(
                         Text(
                             text = track.formattedDuration,
                             style = MaterialTheme.typography.labelSmall.copy(
-                                color = StudioTextMuted
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                             )
                         )
                     }
@@ -234,7 +234,7 @@ fun TrackCard(
                 modifier = Modifier
                     .size(42.dp)
                     .background(
-                        if (isPlaying) EmeraldAccent else StudioCardSurfaceVariant,
+                        if (isPlaying) LocalAccentColor.current else MaterialTheme.colorScheme.surfaceVariant,
                         CircleShape
                     )
                     .testTag("track_play_${track.id}")
@@ -304,9 +304,9 @@ fun MiniPlayerBar(
                 .padding(horizontal = 12.dp, vertical = 8.dp)
                 .testTag("mini_player_bar"),
             shape = RoundedCornerShape(16.dp),
-            color = StudioCardSurfaceVariant,
+            color = MaterialTheme.colorScheme.surfaceVariant,
             tonalElevation = 8.dp,
-            border = CardDefaults.outlinedCardBorder().copy(brush = Brush.horizontalGradient(listOf(EmeraldAccent.copy(alpha = 0.5f), VioletAccent.copy(alpha = 0.5f))))
+            border = CardDefaults.outlinedCardBorder().copy(brush = Brush.horizontalGradient(listOf(LocalAccentColor.current.copy(alpha = 0.5f), VioletAccent.copy(alpha = 0.5f))))
         ) {
             Column(
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
@@ -319,7 +319,7 @@ fun MiniPlayerBar(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(StudioCardSurfaceVariant),
+                            .background(MaterialTheme.colorScheme.surface),
                         contentAlignment = Alignment.Center
                     ) {
                         AudioCoverThumbnail(
@@ -340,14 +340,14 @@ fun MiniPlayerBar(
                             text = track.displayTitle,
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontWeight = FontWeight.SemiBold,
-                                color = StudioTextPrimary
+                                color = MaterialTheme.colorScheme.onSurface
                             ),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = track.displayArtist,
-                            style = MaterialTheme.typography.bodySmall.copy(color = StudioTextSecondary),
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -360,7 +360,7 @@ fun MiniPlayerBar(
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "Editar etiquetas",
-                            tint = StudioTextSecondary,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -369,7 +369,7 @@ fun MiniPlayerBar(
                         onClick = onPlayPauseClick,
                         modifier = Modifier
                             .size(40.dp)
-                            .background(EmeraldAccent, CircleShape)
+                            .background(LocalAccentColor.current, CircleShape)
                             .testTag("mini_player_toggle")
                     ) {
                         Icon(
@@ -393,8 +393,8 @@ fun MiniPlayerBar(
                         .padding(top = 8.dp)
                         .height(3.dp)
                         .clip(CircleShape),
-                    color = EmeraldAccent,
-                    trackColor = StudioBorder
+                    color = LocalAccentColor.current,
+                    trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
                 )
             }
         }

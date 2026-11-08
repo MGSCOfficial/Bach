@@ -11,6 +11,9 @@ import com.example.data.model.AudioTrack
 import com.example.data.model.MusicFolder
 import com.example.data.tagger.FastTagExtractor
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -185,6 +188,10 @@ class FolderManager(private val context: Context) {
         val foldersList = mutableListOf<MusicFolder>()
         val allTracks = mutableListOf<AudioTrack>()
 
+        // Preload cached tracks into index map for instant O(1) cache hits
+        val (_, cachedTracks) = loadCachedTracks()
+        val cacheMap = cachedTracks.associateBy { it.fileUri }
+
         for (uriStr in folderUris) {
             try {
                 val treeUri = Uri.parse(uriStr)
@@ -193,7 +200,7 @@ class FolderManager(private val context: Context) {
                 val folderName = treeDoc?.name ?: "Carpeta de Música"
 
                 val tracksInFolder = mutableListOf<AudioTrack>()
-                scanDirectoryFast(treeUri, treeDocId, uriStr, tracksInFolder)
+                scanDirectoryFast(treeUri, treeDocId, uriStr, tracksInFolder, cacheMap)
 
                 foldersList.add(
                     MusicFolder(
@@ -214,11 +221,12 @@ class FolderManager(private val context: Context) {
         return@withContext Pair(foldersList, allTracks)
     }
 
-    private fun scanDirectoryFast(
+    private suspend fun scanDirectoryFast(
         treeUri: Uri,
         parentDocumentId: String,
         treeUriString: String,
-        outTracks: MutableList<AudioTrack>
+        outTracks: MutableList<AudioTrack>,
+        cacheMap: Map<String, AudioTrack>
     ) {
         val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocumentId)
 
@@ -267,36 +275,64 @@ class FolderManager(private val context: Context) {
             return
         }
 
-        // Parse audio files using microsecond FastTagExtractor
+        val parentFolderUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, parentDocumentId).toString()
+        val toExtract = mutableListOf<AudioFileInfo>()
+
+        // 1. Instant Cache evaluation (0 ms for unchanged files)
         for (info in audioFiles) {
-            try {
-                val track = FastTagExtractor.extractQuickMetadata(
-                    context = context,
-                    uri = info.uri,
-                    fileName = info.name,
-                    fileSize = info.size,
-                    lastModified = info.lastModified
+            val uriKey = info.uri.toString()
+            val cached = cacheMap[uriKey]
+            val base = info.name.substringBeforeLast(".").lowercase()
+            val hasLrcFile = lrcNames.contains(base)
+
+            if (cached != null && cached.sizeBytes == info.size && cached.dateModified == info.lastModified) {
+                outTracks.add(
+                    cached.copy(
+                        hasLyrics = cached.hasLyrics || hasLrcFile,
+                        parentFolderUri = parentFolderUri,
+                        treeUriString = treeUriString
+                    )
                 )
-
-                val base = info.name.substringBeforeLast(".").lowercase()
-                val hasLrcFile = lrcNames.contains(base)
-
-                val parentFolderUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, parentDocumentId).toString()
-
-                val enriched = track.copy(
-                    hasLyrics = track.hasLyrics || hasLrcFile,
-                    parentFolderUri = parentFolderUri,
-                    treeUriString = treeUriString
-                )
-                outTracks.add(enriched)
-            } catch (e: Exception) {
-                Log.w("FolderManager", "Failed quick meta for ${info.name}", e)
+            } else {
+                toExtract.add(info)
             }
         }
 
-        // Recurse into subdirectories
+        // 2. Parallel Coroutine extraction for new / modified files (up to 16 concurrent workers)
+        if (toExtract.isNotEmpty()) {
+            val extracted = coroutineScope {
+                toExtract.chunked(16).flatMap { chunk ->
+                    chunk.map { info ->
+                        async(Dispatchers.IO) {
+                            try {
+                                val track = FastTagExtractor.extractQuickMetadata(
+                                    context = context,
+                                    uri = info.uri,
+                                    fileName = info.name,
+                                    fileSize = info.size,
+                                    lastModified = info.lastModified
+                                )
+                                val base = info.name.substringBeforeLast(".").lowercase()
+                                val hasLrcFile = lrcNames.contains(base)
+                                track.copy(
+                                    hasLyrics = track.hasLyrics || hasLrcFile,
+                                    parentFolderUri = parentFolderUri,
+                                    treeUriString = treeUriString
+                                )
+                            } catch (e: Exception) {
+                                Log.w("FolderManager", "Failed quick meta for ${info.name}", e)
+                                null
+                            }
+                        }
+                    }.awaitAll().filterNotNull()
+                }
+            }
+            outTracks.addAll(extracted)
+        }
+
+        // 3. Recurse into subdirectories
         for (subDirId in subDirs) {
-            scanDirectoryFast(treeUri, subDirId, treeUriString, outTracks)
+            scanDirectoryFast(treeUri, subDirId, treeUriString, outTracks, cacheMap)
         }
     }
 
