@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +32,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -41,6 +43,51 @@ import com.example.data.model.AudioFormat
 import com.example.data.model.AudioTrack
 import com.example.player.PlayerState
 import com.example.ui.theme.*
+import com.example.ui.util.AudioThumbnailLoader
+
+@Composable
+fun AudioCoverThumbnail(
+    track: AudioTrack,
+    modifier: Modifier = Modifier,
+    placeholderIconSize: androidx.compose.ui.unit.Dp = 30.dp
+) {
+    val context = LocalContext.current
+    val bitmapState = produceState<android.graphics.Bitmap?>(
+        initialValue = null,
+        key1 = track.id,
+        key2 = track.hasCover,
+        key3 = track.coverArtBytes
+    ) {
+        if (track.coverArtBytes != null) {
+            value = try {
+                BitmapFactory.decodeByteArray(track.coverArtBytes, 0, track.coverArtBytes.size)
+            } catch (e: Exception) {
+                null
+            }
+        } else if (track.hasCover) {
+            value = AudioThumbnailLoader.loadThumbnail(context, track.fileUri)
+        } else {
+            value = null
+        }
+    }
+
+    val bitmap = bitmapState.value
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = "Carátula de ${track.displayTitle}",
+            contentScale = ContentScale.Crop,
+            modifier = modifier
+        )
+    } else {
+        Icon(
+            imageVector = Icons.Default.Album,
+            contentDescription = null,
+            tint = StudioTextMuted,
+            modifier = Modifier.size(placeholderIconSize)
+        )
+    }
+}
 
 @Composable
 fun TrackCard(
@@ -77,57 +124,31 @@ fun TrackCard(
             // Album Art Thumbnail with Format Badge
             Box(
                 modifier = Modifier
-                    .size(68.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .size(58.dp)
+                    .clip(RoundedCornerShape(10.dp))
                     .background(StudioCardSurfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
-                if (track.hasCover && track.coverArtBytes != null) {
-                    val bitmap = remember(track.coverArtBytes) {
-                        try {
-                            BitmapFactory.decodeByteArray(track.coverArtBytes, 0, track.coverArtBytes.size)
-                        } catch (e: Exception) {
-                            null
-                        }
-                    }
-                    if (bitmap != null) {
-                        Image(
-                            bitmap = bitmap.asImageBitmap(),
-                            contentDescription = "Carátula de ${track.displayTitle}",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.MusicNote,
-                            contentDescription = null,
-                            tint = EmeraldAccent,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.Album,
-                        contentDescription = null,
-                        tint = StudioTextMuted,
-                        modifier = Modifier.size(34.dp)
-                    )
-                }
+                AudioCoverThumbnail(
+                    track = track,
+                    modifier = Modifier.fillMaxSize(),
+                    placeholderIconSize = 28.dp
+                )
 
                 // Format badge overlay
                 Surface(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(4.dp),
-                    shape = RoundedCornerShape(4.dp),
-                    color = if (track.format == AudioFormat.MP3) EmeraldDark.copy(alpha = 0.85f) else VioletDark.copy(alpha = 0.85f)
+                        .padding(3.dp),
+                    shape = RoundedCornerShape(3.dp),
+                    color = if (track.format == AudioFormat.MP3) EmeraldDark.copy(alpha = 0.9f) else VioletDark.copy(alpha = 0.9f)
                 ) {
                     Text(
                         text = track.format.name,
                         color = Color.White,
-                        fontSize = 9.sp,
+                        fontSize = 8.sp,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
                     )
                 }
             }
@@ -298,30 +319,14 @@ fun MiniPlayerBar(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(StudioCardSurface),
+                            .background(StudioCardSurfaceVariant),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (track.hasCover && track.coverArtBytes != null) {
-                            val bitmap = remember(track.coverArtBytes) {
-                                try {
-                                    BitmapFactory.decodeByteArray(track.coverArtBytes, 0, track.coverArtBytes.size)
-                                } catch (e: Exception) {
-                                    null
-                                }
-                            }
-                            if (bitmap != null) {
-                                Image(
-                                    bitmap = bitmap.asImageBitmap(),
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                Icon(Icons.Default.MusicNote, contentDescription = null, tint = EmeraldAccent)
-                            }
-                        } else {
-                            Icon(Icons.Default.MusicNote, contentDescription = null, tint = EmeraldAccent)
-                        }
+                        AudioCoverThumbnail(
+                            track = track,
+                            modifier = Modifier.fillMaxSize(),
+                            placeholderIconSize = 22.dp
+                        )
                     }
 
                     Spacer(modifier = Modifier.width(12.dp))

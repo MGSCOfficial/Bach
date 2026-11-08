@@ -12,6 +12,7 @@ import com.example.data.storage.FolderManager
 import com.example.data.tagger.AudioTagReader
 import com.example.data.tagger.AudioTagWriter
 import com.example.player.AudioPreviewPlayer
+import com.example.ui.util.AudioThumbnailLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -616,6 +617,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     hasLyrics = draft.lyrics.isNotBlank(),
                     dateModified = System.currentTimeMillis()
                 )
+
+                // Invalidate cached thumbnail for this track
+                AudioThumbnailLoader.invalidate(original.fileUri)
 
                 // 3. Atomically update ONLY this track in memory and in cache (NO FULL RESCAN!)
                 folderManager.updateSingleTrackInCache(updatedTrack)
