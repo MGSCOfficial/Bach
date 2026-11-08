@@ -408,18 +408,56 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         _editorState.update { it.copy(embedLyrics = enabled) }
     }
 
+    fun getActiveMetadataSources(): List<MetadataSource> {
+        val s = _settings.value
+        val list = mutableListOf<MetadataSource>()
+        if (s.sourceITunes) list.add(MetadataSource.ITUNES)
+        if (s.sourceMusicBrainz) list.add(MetadataSource.MUSICBRAINZ)
+        if (s.sourceDeezer) list.add(MetadataSource.DEEZER)
+        if (s.sourceTheAudioDb) list.add(MetadataSource.THEAUDIODB)
+        if (s.sourceNetEase) list.add(MetadataSource.NETEASE)
+        if (s.sourceSpotify) list.add(MetadataSource.SPOTIFY)
+        if (s.sourceLastFm) list.add(MetadataSource.LASTFM)
+        if (s.sourceDiscogs) list.add(MetadataSource.DISCOGS)
+        return list
+    }
+
     fun searchOnlineForCurrentTrack(customQuery: String? = null) {
         val draft = _editorState.value.draftTrack ?: return
-        val query = customQuery?.ifBlank { null }
-            ?: when {
-                draft.artist.isNotBlank() && draft.title.isNotBlank() -> "${draft.artist} ${draft.title}"
-                draft.title.isNotBlank() -> draft.title
-                else -> draft.fileName.substringBeforeLast(".")
-            }
 
         viewModelScope.launch {
             _editorState.update { it.copy(isSearchingOnline = true, showCandidateSheet = true) }
-            val candidates = onlineRepo.searchAllSources(query, _settings.value)
+            val cleanTitle = draft.title.replace("\uFEFF", "").replace("\u200B", "").trim()
+            val cleanArtist = draft.artist.replace("\uFEFF", "").replace("\u200B", "").trim()
+            val cleanAlbum = draft.album.replace("\uFEFF", "").replace("\u200B", "").trim()
+
+            val candidates = if (customQuery == null && cleanAlbum.isNotBlank() && (cleanArtist.isNotBlank() || cleanTitle.isNotBlank())) {
+                onlineRepo.searchAdvanced(cleanTitle, cleanArtist, cleanAlbum, _settings.value)
+            } else {
+                val query = customQuery?.replace("\uFEFF", "")?.replace("\u200B", "")?.trim()?.ifBlank { null }
+                    ?: when {
+                        cleanArtist.isNotBlank() && cleanTitle.isNotBlank() -> "$cleanArtist $cleanTitle"
+                        cleanTitle.isNotBlank() -> cleanTitle
+                        else -> draft.fileName.substringBeforeLast(".").replace("\uFEFF", "").replace("\u200B", "").trim()
+                    }
+                onlineRepo.searchAllSources(query, _settings.value)
+            }
+            _editorState.update {
+                it.copy(
+                    isSearchingOnline = false,
+                    onlineCandidates = candidates
+                )
+            }
+        }
+    }
+
+    fun searchOnlineAdvanced(title: String, artist: String, album: String) {
+        viewModelScope.launch {
+            _editorState.update { it.copy(isSearchingOnline = true, showCandidateSheet = true) }
+            val cleanTitle = title.replace("\uFEFF", "").replace("\u200B", "").trim()
+            val cleanArtist = artist.replace("\uFEFF", "").replace("\u200B", "").trim()
+            val cleanAlbum = album.replace("\uFEFF", "").replace("\u200B", "").trim()
+            val candidates = onlineRepo.searchAdvanced(cleanTitle, cleanArtist, cleanAlbum, _settings.value)
             _editorState.update {
                 it.copy(
                     isSearchingOnline = false,

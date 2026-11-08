@@ -8,6 +8,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
@@ -29,6 +30,8 @@ import com.example.ui.screens.FoldersScreen
 import com.example.ui.screens.LibraryScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.SongEditorScreen
+import com.example.data.storage.ThemeMode
+import com.example.ui.theme.AmoledDarkBg
 import com.example.ui.theme.EmeraldAccent
 import com.example.ui.theme.LocalAccentColor
 import com.example.ui.theme.SonicTagTheme
@@ -83,10 +86,12 @@ class MainActivity : ComponentActivity() {
                                     modifier = Modifier.fillMaxSize(),
                                     containerColor = MaterialTheme.colorScheme.background,
                                     bottomBar = {
+                                        val isAmoled = settings.amoledDark && settings.themeMode != ThemeMode.LIGHT
+                                        val navBarColor = if (isAmoled) AmoledDarkBg else MaterialTheme.colorScheme.surface
                                         Column(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .navigationBarsPadding()
+                                                .background(navBarColor)
                                         ) {
                                             MiniPlayerBar(
                                                 playerState = playerState,
@@ -102,8 +107,8 @@ class MainActivity : ComponentActivity() {
                                             )
 
                                             NavigationBar(
-                                                containerColor = MaterialTheme.colorScheme.surface,
-                                                tonalElevation = 8.dp
+                                                containerColor = navBarColor,
+                                                tonalElevation = if (isAmoled) 0.dp else 4.dp
                                             ) {
                                                 MainTab.values().forEach { tab ->
                                                     val isSelected = currentTab == tab

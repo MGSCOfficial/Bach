@@ -48,20 +48,30 @@ fun OnlineSearchResultsSheet(
     candidates: List<OnlineCandidate>,
     isLoading: Boolean,
     initialQuery: String,
+    initialTitle: String = "",
+    initialArtist: String = "",
+    initialAlbum: String = "",
+    activeSources: List<MetadataSource> = listOf(MetadataSource.ITUNES, MetadataSource.MUSICBRAINZ, MetadataSource.DEEZER),
     onSearchQuery: (String) -> Unit,
+    onAdvancedSearch: (title: String, artist: String, album: String) -> Unit = { _, _, _ -> },
     onSelectCandidate: (OnlineCandidate) -> Unit,
     onDismiss: () -> Unit
 ) {
     val accent = LocalAccentColor.current
-    var searchQuery by remember { mutableStateOf(initialQuery) }
+    val cleanInitialQuery = initialQuery.replace("\uFEFF", "").replace("\u200B", "").trim()
+    val cleanInitialTitle = initialTitle.replace("\uFEFF", "").replace("\u200B", "").trim()
+    val cleanInitialArtist = initialArtist.replace("\uFEFF", "").replace("\u200B", "").trim()
+    val cleanInitialAlbum = initialAlbum.replace("\uFEFF", "").replace("\u200B", "").trim()
+
+    var searchQuery by remember(initialQuery) { mutableStateOf(cleanInitialQuery) }
     var selectedSourceFilter by remember { mutableStateOf<MetadataSource?>(null) }
     var previewCandidate by remember { mutableStateOf<OnlineCandidate?>(null) }
 
     // Advanced search state
     var showAdvancedSearch by remember { mutableStateOf(false) }
-    var advTitle by remember { mutableStateOf("") }
-    var advArtist by remember { mutableStateOf("") }
-    var advAlbum by remember { mutableStateOf("") }
+    var advTitle by remember(initialTitle) { mutableStateOf(cleanInitialTitle) }
+    var advArtist by remember(initialArtist) { mutableStateOf(cleanInitialArtist) }
+    var advAlbum by remember(initialAlbum) { mutableStateOf(cleanInitialAlbum) }
 
     val filteredCandidates = remember(candidates, selectedSourceFilter) {
         if (selectedSourceFilter == null) candidates
@@ -82,7 +92,7 @@ fun OnlineSearchResultsSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = StudioDarkBg,
+        containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 16.dp,
         modifier = Modifier.testTag("online_results_sheet")
     ) {
@@ -128,7 +138,7 @@ fun OnlineSearchResultsSheet(
             ) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = StudioCardSurface,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
                     modifier = Modifier
                         .weight(1f)
                         .height(44.dp)
@@ -170,7 +180,7 @@ fun OnlineSearchResultsSheet(
                                     imeAction = ImeAction.Search
                                 ),
                                 keyboardActions = KeyboardActions(
-                                    onSearch = { onSearchQuery(searchQuery) }
+                                    onSearch = { onSearchQuery(searchQuery.replace("\uFEFF", "").replace("\u200B", "").trim()) }
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -219,7 +229,7 @@ fun OnlineSearchResultsSheet(
                 Spacer(modifier = Modifier.width(6.dp))
 
                 Button(
-                    onClick = { onSearchQuery(searchQuery) },
+                    onClick = { onSearchQuery(searchQuery.replace("\uFEFF", "").replace("\u200B", "").trim()) },
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = accent),
                     contentPadding = PaddingValues(horizontal = 14.dp),
@@ -319,12 +329,12 @@ fun OnlineSearchResultsSheet(
 
                             Button(
                                 onClick = {
-                                    val parts = listOf(advTitle.trim(), advArtist.trim(), advAlbum.trim())
-                                        .filter { it.isNotBlank() }
-                                    if (parts.isNotEmpty()) {
-                                        val combined = parts.joinToString(" ")
-                                        searchQuery = combined
-                                        onSearchQuery(combined)
+                                    val t = advTitle.replace("\uFEFF", "").replace("\u200B", "").trim()
+                                    val a = advArtist.replace("\uFEFF", "").replace("\u200B", "").trim()
+                                    val al = advAlbum.replace("\uFEFF", "").replace("\u200B", "").trim()
+                                    if (t.isNotBlank() || a.isNotBlank() || al.isNotBlank()) {
+                                        searchQuery = listOf(a, t, al).filter { it.isNotBlank() }.joinToString(" - ")
+                                        onAdvancedSearch(t, a, al)
                                         showAdvancedSearch = false
                                     }
                                 },
@@ -370,11 +380,12 @@ fun OnlineSearchResultsSheet(
                     )
                 )
 
-                val presentSources = remember(candidates) {
-                    candidates.map { it.source }.distinct()
+                val allDisplaySources = remember(candidates, activeSources) {
+                    (activeSources + candidates.map { it.source }).distinct()
                 }
 
-                presentSources.forEach { src ->
+                allDisplaySources.forEach { src ->
+                    val count = candidates.count { it.source == src }
                     val srcColor = when (src) {
                         MetadataSource.MUSICBRAINZ -> VioletAccent
                         MetadataSource.ITUNES -> RoseAccent
@@ -388,8 +399,10 @@ fun OnlineSearchResultsSheet(
                     }
                     FilterChip(
                         selected = selectedSourceFilter == src,
-                        onClick = { selectedSourceFilter = src },
-                        label = { Text(src.displayName) },
+                        onClick = {
+                            selectedSourceFilter = if (selectedSourceFilter == src) null else src
+                        },
+                        label = { Text("${src.displayName} ($count)") },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = srcColor,
                             selectedLabelColor = Color.White
@@ -458,18 +471,19 @@ fun AdvancedInputField(
     placeholder: String,
     onValueChange: (String) -> Unit
 ) {
+    val accent = LocalAccentColor.current
     Column {
         Text(
             text = label,
             fontSize = 11.sp,
-            color = StudioTextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.Medium
         )
         Spacer(modifier = Modifier.height(3.dp))
         Surface(
             shape = RoundedCornerShape(8.dp),
-            color = StudioCardSurface,
-            border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(StudioBorder)),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(MaterialTheme.colorScheme.outlineVariant)),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(38.dp)
@@ -484,18 +498,18 @@ fun AdvancedInputField(
                     Text(
                         text = placeholder,
                         fontSize = 12.sp,
-                        color = StudioTextMuted
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
                 }
                 BasicTextField(
                     value = value,
                     onValueChange = onValueChange,
                     textStyle = TextStyle(
-                        color = StudioTextPrimary,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 12.sp
                     ),
                     singleLine = true,
-                    cursorBrush = SolidColor(EmeraldAccent),
+                    cursorBrush = SolidColor(accent),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -514,8 +528,8 @@ fun CandidateDetailedCard(
             .fillMaxWidth()
             .testTag("candidate_card_${candidate.id}"),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = StudioCardSurface),
-        border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(StudioBorder))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
+        border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(MaterialTheme.colorScheme.outlineVariant))
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             // Tappable Header & Info Section -> triggers Preview Dialog
@@ -722,8 +736,8 @@ fun CandidatePreviewDialog(
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(20.dp),
-            color = StudioDarkBg,
-            border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(StudioBorder)),
+            color = MaterialTheme.colorScheme.surface,
+            border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(MaterialTheme.colorScheme.outlineVariant)),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp)
@@ -769,8 +783,8 @@ fun CandidatePreviewDialog(
                     modifier = Modifier
                         .size(180.dp)
                         .clip(RoundedCornerShape(14.dp))
-                        .background(StudioCardSurfaceVariant)
-                        .border(1.dp, StudioBorder, RoundedCornerShape(14.dp)),
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     if (!candidate.coverArtUrl.isNullOrBlank()) {

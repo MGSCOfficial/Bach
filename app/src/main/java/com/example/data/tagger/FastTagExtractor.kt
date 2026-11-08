@@ -214,16 +214,22 @@ object FastTagExtractor {
         if (length <= 1) return ""
         val encoding = buffer[offset].toInt()
         val textBytes = buffer.copyOfRange(offset + 1, offset + length)
-        return try {
+        val decoded = try {
             when (encoding) {
-                0x00 -> String(textBytes, Charsets.ISO_8859_1).trim { it <= ' ' || it == '\u0000' }
-                0x01, 0x02 -> String(textBytes, Charsets.UTF_16).trim { it <= ' ' || it == '\u0000' }
-                0x03 -> String(textBytes, Charsets.UTF_8).trim { it <= ' ' || it == '\u0000' }
-                else -> String(textBytes, Charsets.UTF_8).trim { it <= ' ' || it == '\u0000' }
+                0x00 -> String(textBytes, Charsets.ISO_8859_1)
+                0x01, 0x02 -> String(textBytes, Charsets.UTF_16)
+                0x03 -> String(textBytes, Charsets.UTF_8)
+                else -> String(textBytes, Charsets.UTF_8)
             }
         } catch (e: Exception) {
             ""
         }
+        return decoded
+            .replace("\uFEFF", "")
+            .replace("\u200B", "")
+            .replace("\u00A0", " ")
+            .replace("\u0000", "")
+            .trim()
     }
 
     private fun fallbackFromName(fileName: String): QuickMetadata {
@@ -233,6 +239,11 @@ object FastTagExtractor {
 
     private fun cleanFileNameToTitle(fileName: String): String {
         var base = fileName.substringBeforeLast(".")
+            .replace("\uFEFF", "")
+            .replace("\u200B", "")
+            .replace("\u00A0", " ")
+            .replace("\u0000", "")
+            .trim()
         // Remove track numbers like "01. ", "01 - ", "[01] "
         base = base.replace(Regex("^\\s*\\d{1,3}\\s*[.\\-_]\\s*"), "")
         base = base.replace(Regex("^\\s*\\[\\d{1,3}\\]\\s*"), "")

@@ -23,20 +23,28 @@ object AudioTagReader {
         }
     }
 
+    private fun String?.cleanMeta(): String = this
+        ?.replace("\uFEFF", "")
+        ?.replace("\u200B", "")
+        ?.replace("\u00A0", " ")
+        ?.replace("\u0000", "")
+        ?.trim()
+        .orEmpty()
+
     fun readTrack(context: Context, uri: Uri, fileName: String, sizeBytes: Long): AudioTrack? {
         val retriever = MediaMetadataRetriever()
         return try {
             retriever.setDataSource(context, uri)
 
-            val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE).orEmpty().trim()
-            val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST).orEmpty().trim()
-            val album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM).orEmpty().trim()
-            val albumArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST).orEmpty().trim()
-            val year = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)
-                ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DATE).orEmpty().trim()
-            val genre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE).orEmpty().trim()
-            val trackNumber = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER).orEmpty().trim()
-            val discNumber = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER).orEmpty().trim()
+            val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE).cleanMeta()
+            val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST).cleanMeta()
+            val album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM).cleanMeta()
+            val albumArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST).cleanMeta()
+            val year = (retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)
+                ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DATE)).cleanMeta()
+            val genre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE).cleanMeta()
+            val trackNumber = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER).cleanMeta()
+            val discNumber = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER).cleanMeta()
             val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
 
             val coverBytes = retriever.embeddedPicture

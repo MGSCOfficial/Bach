@@ -27,21 +27,30 @@ class OnlineMetadataRepository {
 
     private val userAgent = "SonicTag/1.0.0 ( Android; contact@sonictag.app )"
 
+    private fun String?.cleanQuery(): String = this
+        ?.replace("\uFEFF", "")
+        ?.replace("\u200B", "")
+        ?.replace("\u00A0", " ")
+        ?.replace("\u0000", "")
+        ?.trim()
+        .orEmpty()
+
     suspend fun searchAllSources(
         query: String,
         settings: AppSettings = AppSettings()
     ): List<OnlineCandidate> = withContext(Dispatchers.IO) {
-        if (query.isBlank()) return@withContext emptyList()
+        val q = query.cleanQuery()
+        if (q.isBlank()) return@withContext emptyList()
 
         val tasks = mutableListOf<Deferred<List<OnlineCandidate>>>()
 
         // 1. iTunes (Gratuita)
         if (settings.sourceITunes) {
-            tasks.add(async { searchITunes(query) })
+            tasks.add(async { searchITunes(q) })
         }
         // 2. Deezer (Gratuita)
         if (settings.sourceDeezer) {
-            tasks.add(async { searchDeezer(query) })
+            tasks.add(async { searchDeezer(q) })
         }
         // 3. MusicBrainz (Gratuita)
         if (settings.sourceMusicBrainz) {
@@ -77,12 +86,402 @@ class OnlineMetadataRepository {
             }
         }
 
+        // Si la búsqueda incluye indicador de número de pista (p. ej. "LISA Track 3"), priorizar la pista coincidente
+        val trackPattern = Regex("\\b(?:track|pista|piste)\\s*0*([1-9]\\d*)\\b", RegexOption.IGNORE_CASE)
+        val trackMatch = trackPattern.find(query)
+        val targetTrackNumber = trackMatch?.groupValues?.get(1)?.toIntOrNull()
+
+        if (targetTrackNumber != null) {
+            combined.sortWith(compareByDescending<OnlineCandidate> {
+                it.trackNumber.toIntOrNull() == targetTrackNumber
+            }.thenByDescending { it.matchScore })
+        } else {
+            combined.sortByDescending { it.matchScore }
+        }
+
         return@withContext combined
+    }
+
+    suspend fun searchAdvanced(
+        title: String,
+        artist: String,
+        album: String,
+        settings: AppSettings = AppSettings()
+    ): List<OnlineCandidate> = withContext(Dispatchers.IO) {
+        val t = title.cleanQuery()
+        val a = artist.cleanQuery()
+        val al = album.cleanQuery()
+
+        if (t.isBlank() && a.isBlank() && al.isBlank()) {
+            return@withContext emptyList()
+        }
+
+        // Detectar si el título es en realidad un placeholder de número de pista, p. ej. "Track 3", "Pista 03", o "3"
+        val trackNumRegex = Regex("^(?:track|pista|piste|t)?\\s*0*([1-9]\\d*)(?:\\s*[-:.]\\s*.*)?$", RegexOption.IGNORE_CASE)
+        val trackMatch = trackNumRegex.find(t)
+        val extractedTrackNumber = trackMatch?.groupValues?.get(1)?.toIntOrNull()
+        val isGenericTitle = extractedTrackNumber != null || t.isBlank()
+
+        val tasks = mutableListOf<Deferred<List<OnlineCandidate>>>()
+
+        // 1. iTunes estructurado
+        if (settings.sourceITunes) {
+            tasks.add(async { searchITunesAdvanced(t, a, al, extractedTrackNumber, isGenericTitle) })
+        }
+        // 2. Deezer estructurado
+        if (settings.sourceDeezer) {
+            tasks.add(async { searchDeezerAdvanced(t, a, al, extractedTrackNumber, isGenericTitle) })
+        }
+        // 3. MusicBrainz estructurado
+        if (settings.sourceMusicBrainz) {
+            tasks.add(async { searchMusicBrainzAdvanced(t, a, al, extractedTrackNumber, isGenericTitle) })
+        }
+        // 4. TheAudioDB
+        if (settings.sourceTheAudioDb) {
+            val q = listOf(a, al).filter { it.isNotBlank() }.joinToString(" ")
+            tasks.add(async { searchTheAudioDb(q) })
+        }
+        // 5. NetEase Music
+        if (settings.sourceNetEase) {
+            val q = listOf(a, if (isGenericTitle) al else t).filter { it.isNotBlank() }.joinToString(" ")
+            tasks.add(async { searchNetEase(q) })
+        }
+        // 6. Spotify (si está configurado)
+        if (settings.sourceSpotify && settings.spotifyClientId.isNotBlank() && settings.spotifyClientSecret.isNotBlank()) {
+            val spotifyQuery = buildString {
+                if (!isGenericTitle && t.isNotBlank()) append("track:$t ")
+                if (a.isNotBlank()) append("artist:$a ")
+                if (al.isNotBlank()) append("album:$al ")
+            }.trim().ifBlank { "$a $al" }
+            tasks.add(async { searchSpotify(spotifyQuery, settings.spotifyClientId, settings.spotifyClientSecret) })
+        }
+        // 7. Last.fm (si está configurado)
+        if (settings.sourceLastFm && settings.lastFmApiKey.isNotBlank()) {
+            val q = if (isGenericTitle) "$a $al" else "$a $t"
+            tasks.add(async { searchLastFm(q, settings.lastFmApiKey) })
+        }
+        // 8. Discogs (si está configurado)
+        if (settings.sourceDiscogs && settings.discogsToken.isNotBlank()) {
+            val q = listOf(a, al, if (!isGenericTitle) t else "").filter { it.isNotBlank() }.joinToString(" ")
+            tasks.add(async { searchDiscogs(q, settings.discogsToken) })
+        }
+
+        val combined = mutableListOf<OnlineCandidate>()
+        for (task in tasks) {
+            try {
+                combined.addAll(task.await())
+            } catch (e: Exception) {
+                Log.w("OnlineRepository", "Advanced search task error", e)
+            }
+        }
+
+        // Ordenar por coincidencia real de puntuación calculada, número de pista y presencia de carátula
+        if (extractedTrackNumber != null) {
+            combined.sortWith(
+                compareByDescending<OnlineCandidate> { it.matchScore }
+                    .thenByDescending { it.trackNumber.toIntOrNull() == extractedTrackNumber }
+                    .thenByDescending { it.coverArtUrl != null }
+            )
+        } else {
+            combined.sortWith(
+                compareByDescending<OnlineCandidate> { it.matchScore }
+                    .thenByDescending { it.coverArtUrl != null }
+            )
+        }
+
+        return@withContext combined
+    }
+
+    private suspend fun searchITunesAdvanced(
+        title: String,
+        artist: String,
+        album: String,
+        targetTrackNumber: Int?,
+        isGenericTitle: Boolean
+    ): List<OnlineCandidate> = withContext(Dispatchers.IO) {
+        val results = mutableListOf<OnlineCandidate>()
+        try {
+            // Si el título es genérico (ej. "Track 3") y tenemos artista y álbum, consultamos las canciones del álbum
+            val searchTerm = if (isGenericTitle && artist.isNotBlank() && album.isNotBlank()) {
+                "$artist $album"
+            } else if (artist.isNotBlank() && title.isNotBlank()) {
+                "$artist $title"
+            } else {
+                listOf(artist, album, title).filter { it.isNotBlank() }.joinToString(" ")
+            }
+
+            val encoded = URLEncoder.encode(searchTerm, "UTF-8")
+            val url = "https://itunes.apple.com/search?term=$encoded&entity=song&limit=50"
+            val request = Request.Builder().url(url).header("User-Agent", userAgent).build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext emptyList()
+                val body = response.body?.string() ?: return@withContext emptyList()
+                val root = JSONObject(body)
+                val items = root.optJSONArray("results") ?: return@withContext emptyList()
+
+                for (i in 0 until items.length()) {
+                    val item = items.getJSONObject(i)
+                    val tName = item.optString("trackName", "")
+                    val aName = item.optString("artistName", "")
+                    val alName = item.optString("collectionName", "")
+                    val genre = item.optString("primaryGenreName", "")
+                    val releaseDate = item.optString("releaseDate", "")
+                    val year = if (releaseDate.length >= 4) releaseDate.substring(0, 4) else ""
+                    val tNumInt = item.optInt("trackNumber", 0)
+                    val trackNumber = if (tNumInt > 0) tNumInt.toString() else ""
+                    val discNumber = item.optInt("discNumber", 0).let { if (it > 0) it.toString() else "" }
+                    val durationMs = item.optLong("trackTimeMillis", 0L)
+                    val rawArt = item.optString("artworkUrl100", "")
+                    val highResArt = if (rawArt.isNotBlank()) rawArt.replace("100x100bb.jpg", "1000x1000bb.jpg") else null
+
+                    var score = 0
+                    val artistMatches = artist.isNotBlank() && aName.contains(artist, ignoreCase = true)
+                    val albumMatches = album.isNotBlank() && alName.contains(album, ignoreCase = true)
+                    val trackNumMatches = targetTrackNumber != null && tNumInt == targetTrackNumber
+                    val titleMatches = !isGenericTitle && title.isNotBlank() && tName.contains(title, ignoreCase = true)
+
+                    if (artistMatches) score += 35
+                    if (albumMatches) score += 35
+                    if (trackNumMatches) score += 25
+                    if (titleMatches) score += 25
+                    if (artistMatches && albumMatches) score += 4
+                    if (score == 0) score = 15
+
+                    results.add(
+                        OnlineCandidate(
+                            source = MetadataSource.ITUNES,
+                            title = tName,
+                            artist = aName,
+                            album = alName,
+                            albumArtist = aName,
+                            year = year,
+                            genre = genre,
+                            trackNumber = trackNumber,
+                            discNumber = discNumber,
+                            durationMs = durationMs,
+                            coverArtUrl = highResArt,
+                            matchScore = score.coerceIn(1, 99)
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("OnlineRepository", "iTunes advanced search error", e)
+        }
+        return@withContext results
+    }
+
+    private suspend fun searchDeezerAdvanced(
+        title: String,
+        artist: String,
+        album: String,
+        targetTrackNumber: Int?,
+        isGenericTitle: Boolean
+    ): List<OnlineCandidate> = withContext(Dispatchers.IO) {
+        val results = mutableListOf<OnlineCandidate>()
+        try {
+            // Intentar primero búsqueda estructurada o directa
+            val queries = mutableListOf<String>()
+            if (isGenericTitle && artist.isNotBlank() && album.isNotBlank()) {
+                queries.add("$artist $album")
+                queries.add("artist:\"$artist\" album:\"$album\"")
+            } else {
+                val structured = buildString {
+                    if (artist.isNotBlank()) append("artist:\"$artist\" ")
+                    if (album.isNotBlank()) append("album:\"$album\" ")
+                    if (!isGenericTitle && title.isNotBlank()) append("track:\"$title\" ")
+                }.trim()
+                if (structured.isNotBlank()) queries.add(structured)
+                val plain = listOf(artist, album, if (!isGenericTitle) title else "").filter { it.isNotBlank() }.joinToString(" ")
+                if (plain.isNotBlank()) queries.add(plain)
+            }
+
+            for (qStr in queries.distinct()) {
+                val encoded = URLEncoder.encode(qStr, "UTF-8")
+                val url = "https://api.deezer.com/search?q=$encoded&limit=50"
+                val request = Request.Builder().url(url).header("User-Agent", userAgent).build()
+
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val body = response.body?.string() ?: ""
+                        val root = JSONObject(body)
+                        val items = root.optJSONArray("data")
+                        if (items != null && items.length() > 0) {
+                            for (i in 0 until items.length()) {
+                                val item = items.getJSONObject(i)
+                                val tName = item.optString("title", "")
+                                val durationSec = item.optLong("duration", 0L)
+                                val artistObj = item.optJSONObject("artist")
+                                val aName = artistObj?.optString("name", "") ?: ""
+                                val albumObj = item.optJSONObject("album")
+                                val alName = albumObj?.optString("title", "") ?: ""
+                                val coverXl = albumObj?.optString("cover_xl", "")
+                                val coverBig = albumObj?.optString("cover_big", "")
+                                val bestCover = when {
+                                    !coverXl.isNullOrBlank() -> coverXl
+                                    !coverBig.isNullOrBlank() -> coverBig
+                                    else -> null
+                                }
+                                val tPos = item.optInt("track_position", 0)
+                                val trackNumStr = if (tPos > 0) tPos.toString() else ""
+
+                                var score = 0
+                                val artistMatches = artist.isNotBlank() && aName.contains(artist, ignoreCase = true)
+                                val albumMatches = album.isNotBlank() && alName.contains(album, ignoreCase = true)
+                                val trackNumMatches = targetTrackNumber != null && tPos == targetTrackNumber
+                                val titleMatches = !isGenericTitle && title.isNotBlank() && tName.contains(title, ignoreCase = true)
+
+                                if (artistMatches) score += 35
+                                if (albumMatches) score += 35
+                                if (trackNumMatches) score += 25
+                                if (titleMatches) score += 25
+                                if (artistMatches && albumMatches) score += 4
+                                if (score == 0) score = 15
+
+                                results.add(
+                                    OnlineCandidate(
+                                        source = MetadataSource.DEEZER,
+                                        title = tName,
+                                        artist = aName,
+                                        album = alName,
+                                        albumArtist = aName,
+                                        trackNumber = trackNumStr,
+                                        durationMs = durationSec * 1000L,
+                                        coverArtUrl = bestCover,
+                                        matchScore = score.coerceIn(1, 99)
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+                if (results.isNotEmpty()) break
+            }
+        } catch (e: Exception) {
+            Log.e("OnlineRepository", "Deezer advanced search error", e)
+        }
+        return@withContext results
+    }
+
+    private suspend fun searchMusicBrainzAdvanced(
+        title: String,
+        artist: String,
+        album: String,
+        targetTrackNumber: Int?,
+        isGenericTitle: Boolean
+    ): List<OnlineCandidate> = withContext(Dispatchers.IO) {
+        val results = mutableListOf<OnlineCandidate>()
+        try {
+            val luceneQuery = buildString {
+                if (artist.isNotBlank()) append("artist:\"$artist\" ")
+                if (album.isNotBlank()) append("release:\"$album\" ")
+                if (!isGenericTitle && title.isNotBlank()) append("recording:\"$title\" ")
+            }.trim().ifBlank { listOf(artist, album, title).filter { it.isNotBlank() }.joinToString(" ") }
+
+            val encoded = URLEncoder.encode(luceneQuery, "UTF-8")
+            val url = "https://musicbrainz.org/ws/2/recording?query=$encoded&fmt=json&limit=25"
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", userAgent)
+                .header("Accept", "application/json")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext emptyList()
+                val body = response.body?.string() ?: return@withContext emptyList()
+                val root = JSONObject(body)
+                val recordings = root.optJSONArray("recordings") ?: return@withContext emptyList()
+
+                for (i in 0 until recordings.length()) {
+                    val rec = recordings.getJSONObject(i)
+                    val recTitle = rec.optString("title", "")
+                    val length = rec.optLong("length", 0L)
+
+                    var aName = ""
+                    val artistCredit = rec.optJSONArray("artist-credit")
+                    if (artistCredit != null && artistCredit.length() > 0) {
+                        aName = artistCredit.getJSONObject(0).optString("name", "")
+                    }
+
+                    var alName = ""
+                    var releaseYear = ""
+                    var trackNumber = ""
+                    var discNumber = ""
+                    var releaseMbid = ""
+                    var recTrackNumInt = 0
+
+                    val releases = rec.optJSONArray("releases")
+                    if (releases != null && releases.length() > 0) {
+                        val rel = releases.getJSONObject(0)
+                        alName = rel.optString("title", "")
+                        releaseMbid = rel.optString("id", "")
+                        val date = rel.optString("date", "")
+                        if (date.length >= 4) releaseYear = date.substring(0, 4)
+
+                        val media = rel.optJSONArray("media")
+                        if (media != null && media.length() > 0) {
+                            val med = media.getJSONObject(0)
+                            discNumber = med.optInt("position", 1).toString()
+                            val trackArr = med.optJSONArray("track")
+                            if (trackArr != null && trackArr.length() > 0) {
+                                recTrackNumInt = trackArr.getJSONObject(0).optInt("number", 0)
+                                if (recTrackNumInt > 0) trackNumber = recTrackNumInt.toString()
+                            }
+                        }
+                    }
+
+                    val coverArtUrl = if (releaseMbid.isNotBlank()) {
+                        "https://coverartarchive.org/release/$releaseMbid/front-500"
+                    } else null
+
+                    var score = 0
+                    val artistMatches = artist.isNotBlank() && aName.contains(artist, ignoreCase = true)
+                    val albumMatches = album.isNotBlank() && alName.contains(album, ignoreCase = true)
+                    val trackNumMatches = targetTrackNumber != null && recTrackNumInt == targetTrackNumber
+                    val titleMatches = !isGenericTitle && title.isNotBlank() && recTitle.contains(title, ignoreCase = true)
+
+                    if (artistMatches) score += 35
+                    if (albumMatches) score += 35
+                    if (trackNumMatches) score += 25
+                    if (titleMatches) score += 25
+                    if (artistMatches && albumMatches) score += 4
+                    if (score == 0) score = 15
+
+                    results.add(
+                        OnlineCandidate(
+                            source = MetadataSource.MUSICBRAINZ,
+                            title = recTitle,
+                            artist = aName,
+                            album = alName,
+                            albumArtist = aName,
+                            year = releaseYear,
+                            trackNumber = trackNumber,
+                            discNumber = discNumber,
+                            durationMs = length,
+                            coverArtUrl = coverArtUrl,
+                            matchScore = score.coerceIn(1, 99)
+                        )
+                    )
+                }
+            }
+
+            // Fallback si la búsqueda Lucene no retornó nada
+            if (results.isEmpty()) {
+                val fallbackQuery = listOf(artist, album).filter { it.isNotBlank() }.joinToString(" ")
+                if (fallbackQuery.isNotBlank()) {
+                    results.addAll(searchMusicBrainz(fallbackQuery))
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("OnlineRepository", "MusicBrainz advanced search error", e)
+        }
+        return@withContext results
     }
 
     suspend fun searchITunes(query: String): List<OnlineCandidate> = withContext(Dispatchers.IO) {
         val encoded = URLEncoder.encode(query, "UTF-8")
-        val url = "https://itunes.apple.com/search?term=$encoded&entity=song&limit=15"
+        val url = "https://itunes.apple.com/search?term=$encoded&entity=song&limit=25"
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", userAgent)
@@ -137,50 +536,75 @@ class OnlineMetadataRepository {
     }
 
     suspend fun searchDeezer(query: String): List<OnlineCandidate> = withContext(Dispatchers.IO) {
-        val encoded = URLEncoder.encode(query, "UTF-8")
-        val url = "https://api.deezer.com/search?q=$encoded&limit=15"
-        val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", userAgent)
-            .build()
-
         val results = mutableListOf<OnlineCandidate>()
+        val cleanQ = query.cleanQuery()
+        val queries = mutableListOf(cleanQ)
+
+        // Si la consulta contiene número de pista como "Track 3", agregar fallback limpio sin el número
+        val trackPattern = Regex("\\b(?:track|pista|piste)\\s*0*([1-9]\\d*)\\b", RegexOption.IGNORE_CASE)
+        val trackMatch = trackPattern.find(cleanQ)
+        val targetTrackNumber = trackMatch?.groupValues?.get(1)?.toIntOrNull()
+        if (targetTrackNumber != null) {
+            val clean = cleanQ.replace(trackPattern, "").trim().replace(Regex("\\s+"), " ")
+            if (clean.isNotBlank()) queries.add(clean)
+        }
+
         try {
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext emptyList()
-                val body = response.body?.string() ?: return@withContext emptyList()
-                val root = JSONObject(body)
-                val items = root.optJSONArray("data") ?: return@withContext emptyList()
+            for (q in queries.distinct()) {
+                val encoded = URLEncoder.encode(q, "UTF-8")
+                val url = "https://api.deezer.com/search?q=$encoded&limit=50"
+                val request = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", userAgent)
+                    .build()
 
-                for (i in 0 until items.length()) {
-                    val item = items.getJSONObject(i)
-                    val title = item.optString("title", "")
-                    val durationSec = item.optLong("duration", 0L)
-                    val artistObj = item.optJSONObject("artist")
-                    val artistName = artistObj?.optString("name", "") ?: ""
-                    val albumObj = item.optJSONObject("album")
-                    val albumTitle = albumObj?.optString("title", "") ?: ""
-                    val coverXl = albumObj?.optString("cover_xl", "")
-                    val coverBig = albumObj?.optString("cover_big", "")
-                    val bestCover = when {
-                        !coverXl.isNullOrBlank() -> coverXl
-                        !coverBig.isNullOrBlank() -> coverBig
-                        else -> null
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val body = response.body?.string() ?: ""
+                        val root = JSONObject(body)
+                        val items = root.optJSONArray("data")
+                        if (items != null && items.length() > 0) {
+                            for (i in 0 until items.length()) {
+                                val item = items.getJSONObject(i)
+                                val title = item.optString("title", "")
+                                val durationSec = item.optLong("duration", 0L)
+                                val artistObj = item.optJSONObject("artist")
+                                val artistName = artistObj?.optString("name", "") ?: ""
+                                val albumObj = item.optJSONObject("album")
+                                val albumTitle = albumObj?.optString("title", "") ?: ""
+                                val coverXl = albumObj?.optString("cover_xl", "")
+                                val coverBig = albumObj?.optString("cover_big", "")
+                                val bestCover = when {
+                                    !coverXl.isNullOrBlank() -> coverXl
+                                    !coverBig.isNullOrBlank() -> coverBig
+                                    else -> null
+                                }
+                                val tPos = item.optInt("track_position", 0)
+                                val trackNumStr = if (tPos > 0) tPos.toString() else ""
+
+                                var score = 93
+                                if (targetTrackNumber != null && tPos == targetTrackNumber) {
+                                    score = 99
+                                }
+
+                                results.add(
+                                    OnlineCandidate(
+                                        source = MetadataSource.DEEZER,
+                                        title = title,
+                                        artist = artistName,
+                                        album = albumTitle,
+                                        albumArtist = artistName,
+                                        trackNumber = trackNumStr,
+                                        durationMs = durationSec * 1000L,
+                                        coverArtUrl = bestCover,
+                                        matchScore = score
+                                    )
+                                )
+                            }
+                        }
                     }
-
-                    results.add(
-                        OnlineCandidate(
-                            source = MetadataSource.DEEZER,
-                            title = title,
-                            artist = artistName,
-                            album = albumTitle,
-                            albumArtist = artistName,
-                            durationMs = durationSec * 1000L,
-                            coverArtUrl = bestCover,
-                            matchScore = 93
-                        )
-                    )
                 }
+                if (results.isNotEmpty()) break
             }
         } catch (e: Exception) {
             Log.e("OnlineRepository", "Deezer query error", e)
@@ -190,7 +614,7 @@ class OnlineMetadataRepository {
 
     suspend fun searchMusicBrainz(query: String): List<OnlineCandidate> = withContext(Dispatchers.IO) {
         val encoded = URLEncoder.encode(query, "UTF-8")
-        val url = "https://musicbrainz.org/ws/2/recording?query=$encoded&fmt=json&limit=10"
+        val url = "https://musicbrainz.org/ws/2/recording?query=$encoded&fmt=json&limit=20"
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", userAgent)

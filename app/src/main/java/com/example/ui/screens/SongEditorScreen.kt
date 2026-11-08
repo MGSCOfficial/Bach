@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.data.model.AudioFormat
+import com.example.data.storage.ThemeMode
 import com.example.ui.components.CoverArtPickerSheet
 import com.example.ui.components.OnlineSearchResultsSheet
 import com.example.ui.components.PreviewDiffDialog
@@ -45,7 +46,16 @@ fun SongEditorScreen(
 ) {
     val editorState by viewModel.editorState.collectAsStateWithLifecycle()
     val playerState by viewModel.audioPlayer.playerState.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    val accent = LocalAccentColor.current
+    val isAmoled = settings.amoledDark && settings.themeMode != ThemeMode.LIGHT
+    val screenBg = if (isAmoled) AmoledDarkBg else MaterialTheme.colorScheme.background
+    val cardBg = if (isAmoled) AmoledCardSurface else MaterialTheme.colorScheme.surface
+    val cardVariantBg = if (isAmoled) AmoledCardSurfaceVariant else MaterialTheme.colorScheme.surfaceVariant
+    val cardBorderColor = if (isAmoled) AmoledBorder else MaterialTheme.colorScheme.outlineVariant
+    val bottomBarBg = if (isAmoled) AmoledDarkBg else MaterialTheme.colorScheme.surface
 
     BackHandler {
         viewModel.closeTrackEditor()
@@ -66,10 +76,10 @@ fun SongEditorScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(StudioDarkBg),
+                .background(screenBg),
             contentAlignment = Alignment.Center
         ) {
-            CircularProgressIndicator(color = EmeraldAccent)
+            CircularProgressIndicator(color = accent)
         }
         return
     }
@@ -80,7 +90,7 @@ fun SongEditorScreen(
         modifier = modifier
             .fillMaxSize()
             .testTag("song_editor_screen"),
-        containerColor = StudioDarkBg,
+        containerColor = screenBg,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
@@ -90,12 +100,12 @@ fun SongEditorScreen(
                             text = "Sound ID — Editor",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = StudioTextPrimary
+                                color = MaterialTheme.colorScheme.onBackground
                             )
                         )
                         Text(
                             text = draft.fileName,
-                            style = MaterialTheme.typography.labelSmall.copy(color = StudioTextSecondary),
+                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                             maxLines = 1
                         )
                     }
@@ -111,7 +121,7 @@ fun SongEditorScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Volver",
-                            tint = StudioTextPrimary
+                            tint = MaterialTheme.colorScheme.onBackground
                         )
                     }
                 },
@@ -137,19 +147,19 @@ fun SongEditorScreen(
                         Icon(
                             imageVector = Icons.Default.Compare,
                             contentDescription = "Previsualizar diferencias",
-                            tint = EmeraldAccent
+                            tint = accent
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = StudioDarkBg)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = screenBg)
             )
         },
         bottomBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = StudioCardSurface,
-                tonalElevation = 8.dp,
-                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(StudioBorder))
+                color = bottomBarBg,
+                tonalElevation = if (isAmoled) 0.dp else 8.dp,
+                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(cardBorderColor))
             ) {
                 Row(
                     modifier = Modifier
@@ -165,8 +175,8 @@ fun SongEditorScreen(
                             .height(48.dp)
                             .testTag("btn_preview_diff"),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = EmeraldAccent),
-                        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(EmeraldAccent))
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = accent),
+                        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(accent))
                     ) {
                         Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
@@ -180,7 +190,7 @@ fun SongEditorScreen(
                             .height(48.dp)
                             .testTag("btn_save_tags"),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = EmeraldAccent),
+                        colors = ButtonDefaults.buttonColors(containerColor = accent),
                         enabled = !editorState.isSaving
                     ) {
                         if (editorState.isSaving) {
@@ -210,8 +220,8 @@ fun SongEditorScreen(
                     .fillMaxWidth()
                     .testTag("album_art_hero_card"),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = StudioCardSurface),
-                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(StudioBorder))
+                colors = CardDefaults.cardColors(containerColor = cardBg),
+                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(cardBorderColor))
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -221,7 +231,7 @@ fun SongEditorScreen(
                         modifier = Modifier
                             .size(200.dp)
                             .clip(RoundedCornerShape(16.dp))
-                            .background(StudioCardSurfaceVariant)
+                            .background(cardVariantBg)
                             .clickable { viewModel.openCoverPicker() }
                             .testTag("album_cover_preview"),
                         contentAlignment = Alignment.Center
@@ -255,9 +265,9 @@ fun SongEditorScreen(
                             )
                         } else {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.Album, contentDescription = null, tint = StudioTextMuted, modifier = Modifier.size(64.dp))
+                                Icon(Icons.Default.Album, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(64.dp))
                                 Spacer(modifier = Modifier.height(6.dp))
-                                Text("Sin Carátula", color = StudioTextMuted, fontSize = 12.sp)
+                                Text("Sin Carátula", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                             }
                         }
 
@@ -269,14 +279,14 @@ fun SongEditorScreen(
                                 .clickable { viewModel.openCoverPicker() },
                             shape = CircleShape,
                             color = Color.Black.copy(alpha = 0.85f),
-                            border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(EmeraldAccent))
+                            border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(accent))
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = EmeraldAccent, modifier = Modifier.size(14.dp))
+                                Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = accent, modifier = Modifier.size(14.dp))
                                 Text("Cambiar Carátula", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
@@ -288,7 +298,7 @@ fun SongEditorScreen(
                         ?: if (draft.hasCover) "Carátula asignada (${draft.coverArtBytes?.size ?: 0} B)" else "Sin imagen asignada"
                     Text(
                         text = coverLabel,
-                        style = MaterialTheme.typography.labelSmall.copy(color = StudioTextSecondary),
+                        style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                         maxLines = 1
                     )
                 }
@@ -300,8 +310,8 @@ fun SongEditorScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = StudioCardSurface),
-                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(StudioBorder))
+                colors = CardDefaults.cardColors(containerColor = cardBg),
+                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(cardBorderColor))
             ) {
                 Row(
                     modifier = Modifier
@@ -319,13 +329,13 @@ fun SongEditorScreen(
                         },
                         modifier = Modifier
                             .size(42.dp)
-                            .background(if (isThisTrackPlaying) EmeraldAccent else StudioCardSurfaceVariant, CircleShape)
+                            .background(if (isThisTrackPlaying) accent else cardVariantBg, CircleShape)
                             .testTag("editor_play_button")
                     ) {
                         Icon(
                             imageVector = if (isThisTrackPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = if (isThisTrackPlaying) "Pausar" else "Escuchar",
-                            tint = if (isThisTrackPlaying) Color.Black else StudioTextPrimary,
+                            tint = if (isThisTrackPlaying) Color.Black else MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -337,7 +347,7 @@ fun SongEditorScreen(
                             text = "Escuchar Pista de Audio",
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontWeight = FontWeight.SemiBold,
-                                color = StudioTextPrimary
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         )
 
@@ -345,18 +355,18 @@ fun SongEditorScreen(
                         val totalSec = (if (playerState.durationMs > 0) playerState.durationMs else original.durationMs) / 1000
                         Text(
                             text = String.format("%02d:%02d / %02d:%02d", currentSec / 60, currentSec % 60, totalSec / 60, totalSec % 60),
-                            style = MaterialTheme.typography.labelSmall.copy(color = StudioTextMuted)
+                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                         )
                     }
 
                     if (original.durationMs > 0) {
                         Surface(
                             shape = RoundedCornerShape(4.dp),
-                            color = StudioCardSurfaceVariant
+                            color = cardVariantBg
                         ) {
                             Text(
                                 text = original.formattedDuration,
-                                color = StudioTextSecondary,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 11.sp,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
@@ -374,10 +384,10 @@ fun SongEditorScreen(
                     .clickable { viewModel.searchOnlineForCurrentTrack() }
                     .testTag("auto_search_online_banner"),
                 shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = StudioCardSurfaceVariant),
+                colors = CardDefaults.cardColors(containerColor = cardVariantBg),
                 border = CardDefaults.outlinedCardBorder().copy(
                     brush = Brush.horizontalGradient(
-                        listOf(EmeraldAccent.copy(alpha = 0.6f), VioletAccent.copy(alpha = 0.6f))
+                        listOf(accent.copy(alpha = 0.6f), MaterialTheme.colorScheme.secondary.copy(alpha = 0.6f))
                     )
                 )
             ) {
@@ -391,7 +401,7 @@ fun SongEditorScreen(
                         modifier = Modifier
                             .size(42.dp)
                             .background(
-                                Brush.linearGradient(listOf(EmeraldAccent, VioletAccent)),
+                                Brush.linearGradient(listOf(accent, MaterialTheme.colorScheme.secondary)),
                                 CircleShape
                             ),
                         contentAlignment = Alignment.Center
@@ -411,19 +421,19 @@ fun SongEditorScreen(
                             text = "Buscar en MusicBrainz • iTunes • Deezer",
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = StudioTextPrimary
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         )
                         Text(
                             text = "Aplica todos los metadatos y carátula con 1 toque",
-                            style = MaterialTheme.typography.bodySmall.copy(color = EmeraldAccent)
+                            style = MaterialTheme.typography.bodySmall.copy(color = accent)
                         )
                     }
 
                     Icon(
                         imageVector = Icons.Default.ArrowForward,
                         contentDescription = null,
-                        tint = StudioTextSecondary,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -438,9 +448,9 @@ fun SongEditorScreen(
                         .fillMaxWidth()
                         .testTag("active_online_candidate_card"),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = StudioCardSurface),
+                    colors = CardDefaults.cardColors(containerColor = cardBg),
                     border = CardDefaults.outlinedCardBorder().copy(
-                        brush = androidx.compose.ui.graphics.SolidColor(EmeraldAccent.copy(alpha = 0.5f))
+                        brush = androidx.compose.ui.graphics.SolidColor(accent.copy(alpha = 0.5f))
                     )
                 ) {
                     Row(
@@ -452,7 +462,7 @@ fun SongEditorScreen(
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = null,
-                            tint = EmeraldAccent,
+                            tint = accent,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
@@ -460,20 +470,20 @@ fun SongEditorScreen(
                             Text(
                                 text = "Metadatos aplicados de ${candidate.source.displayName}",
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    color = EmeraldAccent,
+                                    color = accent,
                                     fontWeight = FontWeight.Bold
                                 )
                             )
                             Text(
                                 text = "${candidate.title} — ${candidate.artist} (${candidate.album})",
-                                style = MaterialTheme.typography.bodySmall.copy(color = StudioTextPrimary),
+                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface),
                                 maxLines = 1
                             )
                         }
                         TextButton(
                             onClick = { viewModel.searchOnlineForCurrentTrack() }
                         ) {
-                            Text("Cambiar", color = StudioTextSecondary, fontSize = 12.sp)
+                            Text("Cambiar", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                         }
                     }
                 }
@@ -486,9 +496,9 @@ fun SongEditorScreen(
                     .fillMaxWidth()
                     .testTag("lyrics_section_card"),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = StudioCardSurface),
+                colors = CardDefaults.cardColors(containerColor = cardBg),
                 border = CardDefaults.outlinedCardBorder().copy(
-                    brush = androidx.compose.ui.graphics.SolidColor(if (draft.hasLyrics) CyanAccent.copy(alpha = 0.5f) else StudioBorder)
+                    brush = androidx.compose.ui.graphics.SolidColor(if (draft.hasLyrics) accent.copy(alpha = 0.5f) else cardBorderColor)
                 )
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
@@ -498,13 +508,13 @@ fun SongEditorScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Description, contentDescription = null, tint = CyanAccent, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Default.Description, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "Letra de la Canción",
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    color = StudioTextPrimary
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             )
                         }
@@ -512,7 +522,7 @@ fun SongEditorScreen(
                         Button(
                             onClick = { viewModel.searchLyricsForCurrentTrack() },
                             enabled = !editorState.isSearchingLyrics,
-                            colors = ButtonDefaults.buttonColors(containerColor = CyanAccent),
+                            colors = ButtonDefaults.buttonColors(containerColor = accent),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                             modifier = Modifier.testTag("btn_search_lyrics")
                         ) {
@@ -541,12 +551,12 @@ fun SongEditorScreen(
                         placeholder = { Text("Escribe o pega aquí la letra, o usa el botón 'Buscar en LRCLIB'...") },
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CyanAccent,
-                            unfocusedBorderColor = StudioBorder,
-                            focusedContainerColor = StudioCardSurfaceVariant,
-                            unfocusedContainerColor = StudioCardSurfaceVariant,
-                            focusedTextColor = StudioTextPrimary,
-                            unfocusedTextColor = StudioTextPrimary
+                            focusedBorderColor = accent,
+                            unfocusedBorderColor = cardBorderColor,
+                            focusedContainerColor = cardVariantBg,
+                            unfocusedContainerColor = cardVariantBg,
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                         )
                     )
 
@@ -563,18 +573,18 @@ fun SongEditorScreen(
                                 text = "Guardar archivo .lrc en carpeta",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontWeight = FontWeight.SemiBold,
-                                    color = StudioTextPrimary
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             )
                             Text(
                                 text = "Crea archivo con la letra sincronizada junto al audio",
-                                style = MaterialTheme.typography.labelSmall.copy(color = StudioTextMuted)
+                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                             )
                         }
                         Switch(
                             checked = editorState.saveLrcFile,
                             onCheckedChange = { viewModel.setSaveLrcFile(it) },
-                            colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = CyanAccent)
+                            colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = accent)
                         )
                     }
 
@@ -590,18 +600,18 @@ fun SongEditorScreen(
                                 text = "Incrustar letra en la canción",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontWeight = FontWeight.SemiBold,
-                                    color = StudioTextPrimary
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             )
                             Text(
                                 text = "Guarda la letra dentro de la etiqueta ${if (draft.format == AudioFormat.MP3) "USLT (ID3v2)" else "©lyr (MP4)"}",
-                                style = MaterialTheme.typography.labelSmall.copy(color = StudioTextMuted)
+                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                             )
                         }
                         Switch(
                             checked = editorState.embedLyrics,
                             onCheckedChange = { viewModel.setEmbedLyrics(it) },
-                            colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = EmeraldAccent)
+                            colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = accent)
                         )
                     }
                 }
@@ -614,7 +624,7 @@ fun SongEditorScreen(
                 text = "Metadatos de la Pista",
                 style = MaterialTheme.typography.titleSmall.copy(
                     fontWeight = FontWeight.Bold,
-                    color = StudioTextPrimary
+                    color = MaterialTheme.colorScheme.onBackground
                 )
             )
 
@@ -733,11 +743,21 @@ fun SongEditorScreen(
     // ==================== MODAL SHEETS & DIALOGS ====================
 
     if (editorState.showCandidateSheet) {
+        val cleanArtist = draft.artist.replace("\uFEFF", "").replace("\u200B", "").trim()
+        val cleanTitle = draft.title.replace("\uFEFF", "").replace("\u200B", "").trim()
+        val cleanAlbum = draft.album.replace("\uFEFF", "").replace("\u200B", "").trim()
+        val queryDefault = "$cleanArtist $cleanTitle".trim().ifBlank { draft.fileName.substringBeforeLast(".") }
+
         OnlineSearchResultsSheet(
             candidates = editorState.onlineCandidates,
             isLoading = editorState.isSearchingOnline,
-            initialQuery = "${draft.artist} ${draft.title}".trim().ifBlank { draft.fileName.substringBeforeLast(".") },
+            initialQuery = queryDefault,
+            initialTitle = cleanTitle,
+            initialArtist = cleanArtist,
+            initialAlbum = cleanAlbum,
+            activeSources = viewModel.getActiveMetadataSources(),
             onSearchQuery = { q -> viewModel.searchOnlineForCurrentTrack(q) },
+            onAdvancedSearch = { t, a, al -> viewModel.searchOnlineAdvanced(t, a, al) },
             onSelectCandidate = { candidate -> viewModel.selectCandidate(candidate) },
             onDismiss = { viewModel.hideCandidateSheet() }
         )
@@ -777,26 +797,27 @@ fun EditorTextField(
     singleLine: Boolean = true,
     testTag: String = ""
 ) {
+    val accent = LocalAccentColor.current
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(label) },
         leadingIcon = {
-            Icon(imageVector = icon, contentDescription = null, tint = StudioTextSecondary, modifier = Modifier.size(18.dp))
+            Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
         },
         modifier = modifier
             .fillMaxWidth()
             .testTag(testTag),
         shape = RoundedCornerShape(12.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = EmeraldAccent,
-            unfocusedBorderColor = StudioBorder,
-            focusedContainerColor = StudioCardSurface,
-            unfocusedContainerColor = StudioCardSurface,
-            focusedTextColor = StudioTextPrimary,
-            unfocusedTextColor = StudioTextPrimary,
-            focusedLabelColor = EmeraldAccent,
-            unfocusedLabelColor = StudioTextSecondary
+            focusedBorderColor = accent,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+            focusedContainerColor = MaterialTheme.colorScheme.surface,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+            focusedLabelColor = accent,
+            unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
         ),
         singleLine = singleLine
     )
