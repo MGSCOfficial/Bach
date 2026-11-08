@@ -165,22 +165,11 @@ fun LibraryScreen(
                 contentColor = Color.Black,
                 shape = CircleShape,
                 modifier = Modifier
-                    .padding(bottom = if (activePlayingTrack != null) 64.dp else 16.dp)
+                    .padding(bottom = 16.dp)
                     .testTag("fab_add_folder")
             ) {
                 Icon(Icons.Default.CreateNewFolder, contentDescription = "Añadir carpeta de música")
             }
-        },
-        bottomBar = {
-            MiniPlayerBar(
-                playerState = playerState,
-                track = activePlayingTrack,
-                onPlayPauseClick = { viewModel.audioPlayer.togglePlayPause() },
-                onSeek = { pos -> viewModel.audioPlayer.seekTo(pos) },
-                onOpenEditor = {
-                    activePlayingTrack?.let { onTrackSelect(it) }
-                }
-            )
         }
     ) { paddingValues ->
         Column(
@@ -509,7 +498,7 @@ fun LibraryScreen(
                         .fillMaxWidth()
                         .weight(1f),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
-                    contentPadding = PaddingValues(bottom = if (activePlayingTrack != null) 80.dp else 24.dp)
+                    contentPadding = PaddingValues(bottom = 24.dp)
                 ) {
                     items(libraryState.filteredTracks, key = { it.id }) { track ->
                         val isPlaying = playerState.isPlaying && playerState.activeTrackId == track.id

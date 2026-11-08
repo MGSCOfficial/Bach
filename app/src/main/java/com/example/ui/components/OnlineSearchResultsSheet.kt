@@ -1,5 +1,10 @@
 package com.example.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -10,6 +15,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -23,9 +31,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import com.example.data.model.MetadataSource
 import com.example.data.model.OnlineCandidate
@@ -43,10 +54,29 @@ fun OnlineSearchResultsSheet(
 ) {
     var searchQuery by remember { mutableStateOf(initialQuery) }
     var selectedSourceFilter by remember { mutableStateOf<MetadataSource?>(null) }
+    var previewCandidate by remember { mutableStateOf<OnlineCandidate?>(null) }
+
+    // Advanced search state
+    var showAdvancedSearch by remember { mutableStateOf(false) }
+    var advTitle by remember { mutableStateOf("") }
+    var advArtist by remember { mutableStateOf("") }
+    var advAlbum by remember { mutableStateOf("") }
 
     val filteredCandidates = remember(candidates, selectedSourceFilter) {
         if (selectedSourceFilter == null) candidates
         else candidates.filter { it.source == selectedSourceFilter }
+    }
+
+    // Candidate preview dialog when tapped on image or text
+    previewCandidate?.let { candidate ->
+        CandidatePreviewDialog(
+            candidate = candidate,
+            onApply = {
+                previewCandidate = null
+                onSelectCandidate(candidate)
+            },
+            onDismiss = { previewCandidate = null }
+        )
     }
 
     ModalBottomSheet(
@@ -90,7 +120,7 @@ fun OnlineSearchResultsSheet(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Search query input field with external compact search button
+            // Search query input field with external compact search button + Advanced toggle button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -135,10 +165,10 @@ fun OnlineSearchResultsSheet(
                                 ),
                                 singleLine = true,
                                 cursorBrush = SolidColor(EmeraldAccent),
-                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                                    imeAction = androidx.compose.ui.text.input.ImeAction.Search
+                                keyboardOptions = KeyboardOptions(
+                                    imeAction = ImeAction.Search
                                 ),
-                                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                keyboardActions = KeyboardActions(
                                     onSearch = { onSearchQuery(searchQuery) }
                                 ),
                                 modifier = Modifier
@@ -162,7 +192,30 @@ fun OnlineSearchResultsSheet(
                     }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+
+                // Advanced Search Toggle Button
+                IconButton(
+                    onClick = { showAdvancedSearch = !showAdvancedSearch },
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (showAdvancedSearch) EmeraldAccent.copy(alpha = 0.2f) else StudioCardSurface)
+                        .border(
+                            width = 1.dp,
+                            color = if (showAdvancedSearch) EmeraldAccent else StudioBorder,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Tune,
+                        contentDescription = "Búsqueda avanzada",
+                        tint = if (showAdvancedSearch) EmeraldAccent else StudioTextSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
 
                 Button(
                     onClick = { onSearchQuery(searchQuery) },
@@ -180,7 +233,124 @@ fun OnlineSearchResultsSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            // Advanced Search Expandable Panel
+            AnimatedVisibility(
+                visible = showAdvancedSearch,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = StudioCardSurfaceVariant,
+                    border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(StudioBorder)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Búsqueda avanzada por campos",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = EmeraldAccent
+                                )
+                            )
+                            Text(
+                                text = "iTunes • Deezer • MB",
+                                fontSize = 10.sp,
+                                color = StudioTextMuted
+                            )
+                        }
+
+                        // Title Field
+                        AdvancedInputField(
+                            label = "Título de la canción",
+                            value = advTitle,
+                            placeholder = "Ej: Double Fantasy",
+                            onValueChange = { advTitle = it }
+                        )
+
+                        // Artist Field
+                        AdvancedInputField(
+                            label = "Nombre del artista",
+                            value = advArtist,
+                            placeholder = "Ej: The Weeknd",
+                            onValueChange = { advArtist = it }
+                        )
+
+                        // Album Field
+                        AdvancedInputField(
+                            label = "Nombre del álbum",
+                            value = advAlbum,
+                            placeholder = "Ej: The Idol",
+                            onValueChange = { advAlbum = it }
+                        )
+
+                        // Action Buttons: Clear & Search
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(
+                                onClick = {
+                                    advTitle = ""
+                                    advArtist = ""
+                                    advAlbum = ""
+                                }
+                            ) {
+                                Text(
+                                    text = "Limpiar",
+                                    color = StudioTextSecondary,
+                                    fontSize = 12.sp
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(6.dp))
+
+                            Button(
+                                onClick = {
+                                    val parts = listOf(advTitle.trim(), advArtist.trim(), advAlbum.trim())
+                                        .filter { it.isNotBlank() }
+                                    if (parts.isNotEmpty()) {
+                                        val combined = parts.joinToString(" ")
+                                        searchQuery = combined
+                                        onSearchQuery(combined)
+                                        showAdvancedSearch = false
+                                    }
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = EmeraldAccent),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = null,
+                                    tint = Color.Black,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Buscar campos",
+                                    color = Color.Black,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Source filter chips
             Row(
@@ -273,6 +443,7 @@ fun OnlineSearchResultsSheet(
                     items(filteredCandidates, key = { it.id }) { candidate ->
                         CandidateDetailedCard(
                             candidate = candidate,
+                            onPreview = { previewCandidate = candidate },
                             onSelect = { onSelectCandidate(candidate) }
                         )
                     }
@@ -283,8 +454,61 @@ fun OnlineSearchResultsSheet(
 }
 
 @Composable
+fun AdvancedInputField(
+    label: String,
+    value: String,
+    placeholder: String,
+    onValueChange: (String) -> Unit
+) {
+    Column {
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            color = StudioTextSecondary,
+            fontWeight = FontWeight.Medium
+        )
+        Spacer(modifier = Modifier.height(3.dp))
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = StudioCardSurface,
+            border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(StudioBorder)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(38.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 10.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                if (value.isEmpty()) {
+                    Text(
+                        text = placeholder,
+                        fontSize = 12.sp,
+                        color = StudioTextMuted
+                    )
+                }
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    textStyle = TextStyle(
+                        color = StudioTextPrimary,
+                        fontSize = 12.sp
+                    ),
+                    singleLine = true,
+                    cursorBrush = SolidColor(EmeraldAccent),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun CandidateDetailedCard(
     candidate: OnlineCandidate,
+    onPreview: () -> Unit,
     onSelect: () -> Unit
 ) {
     Card(
@@ -293,148 +517,162 @@ fun CandidateDetailedCard(
             .testTag("candidate_card_${candidate.id}"),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = StudioCardSurface),
-        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(StudioBorder))
+        border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(StudioBorder))
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            // Top Row: Cover Thumbnail + Badges + Title/Artist
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top
+            // Tappable Header & Info Section -> triggers Preview Dialog
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable(onClick = onPreview)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(68.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(StudioCardSurfaceVariant),
-                    contentAlignment = Alignment.Center
+                // Top Row: Cover Thumbnail + Badges + Title/Artist
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top
                 ) {
-                    if (!candidate.coverArtUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = candidate.coverArtUrl,
-                            contentDescription = "Carátula de ${candidate.title}",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Album,
-                            contentDescription = null,
-                            tint = StudioTextMuted,
-                            modifier = Modifier.size(36.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(14.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(68.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(StudioCardSurfaceVariant),
+                        contentAlignment = Alignment.Center
                     ) {
-                        val badgeColor = when (candidate.source) {
-                            MetadataSource.MUSICBRAINZ -> VioletAccent
-                            MetadataSource.ITUNES -> RoseAccent
-                            MetadataSource.DEEZER -> CyanAccent
-                            MetadataSource.MANUAL -> EmeraldAccent
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = badgeColor.copy(alpha = 0.2f)
-                        ) {
-                            Text(
-                                text = candidate.source.displayName,
-                                color = badgeColor,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        if (!candidate.coverArtUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = candidate.coverArtUrl,
+                                contentDescription = "Carátula de ${candidate.title}",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Album,
+                                contentDescription = null,
+                                tint = StudioTextMuted,
+                                modifier = Modifier.size(36.dp)
                             )
                         }
+                    }
 
-                        if (candidate.matchScore > 0) {
+                    Spacer(modifier = Modifier.width(14.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            val badgeColor = when (candidate.source) {
+                                MetadataSource.MUSICBRAINZ -> VioletAccent
+                                MetadataSource.ITUNES -> RoseAccent
+                                MetadataSource.DEEZER -> CyanAccent
+                                MetadataSource.MANUAL -> EmeraldAccent
+                            }
                             Surface(
                                 shape = RoundedCornerShape(4.dp),
-                                color = EmeraldDark.copy(alpha = 0.2f)
+                                color = badgeColor.copy(alpha = 0.2f)
                             ) {
                                 Text(
-                                    text = "${candidate.matchScore}% Coincidencia",
-                                    color = EmeraldAccent,
+                                    text = candidate.source.displayName,
+                                    color = badgeColor,
                                     fontSize = 10.sp,
-                                    fontWeight = FontWeight.Medium,
+                                    fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
+
+                            if (candidate.matchScore > 0) {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = EmeraldDark.copy(alpha = 0.2f)
+                                ) {
+                                    Text(
+                                        text = "${candidate.matchScore}% Coincidencia",
+                                        color = EmeraldAccent,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
                         }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text(
+                            text = candidate.title,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = StudioTextPrimary
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        Text(
+                            text = candidate.artist,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                color = EmeraldAccent
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        Text(
+                            text = "Toca para previsualizar detalles completos",
+                            fontSize = 10.sp,
+                            color = StudioTextMuted
+                        )
                     }
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Text(
-                        text = candidate.title,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = StudioTextPrimary
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Text(
-                        text = candidate.artist,
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            color = EmeraldAccent
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
                 }
-            }
 
-            Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-            // Symmetrical, well-structured Metadata Grid
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = StudioCardSurfaceVariant,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                // Symmetrical, well-structured Metadata Grid
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = StudioCardSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    // Row 1: Álbum + Año
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    Column(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        MetadataFieldPreview(
-                            label = "Álbum",
-                            value = candidate.album.ifBlank { "Desconocido" },
-                            modifier = Modifier.weight(1f)
-                        )
-                        MetadataFieldPreview(
-                            label = "Año",
-                            value = candidate.year.ifBlank { "—" },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
+                        // Row 1: Álbum + Año
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            MetadataFieldPreview(
+                                label = "Álbum",
+                                value = candidate.album.ifBlank { "Desconocido" },
+                                modifier = Modifier.weight(1f)
+                            )
+                            MetadataFieldPreview(
+                                label = "Año",
+                                value = candidate.year.ifBlank { "—" },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
 
-                    // Row 2: Género + Pista #
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        MetadataFieldPreview(
-                            label = "Género",
-                            value = candidate.genre.ifBlank { "—" },
-                            modifier = Modifier.weight(1f)
-                        )
-                        MetadataFieldPreview(
-                            label = "Pista #",
-                            value = candidate.trackNumber.ifBlank { "—" },
-                            modifier = Modifier.weight(1f)
-                        )
+                        // Row 2: Género + Pista #
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            MetadataFieldPreview(
+                                label = "Género",
+                                value = candidate.genre.ifBlank { "—" },
+                                modifier = Modifier.weight(1f)
+                            )
+                            MetadataFieldPreview(
+                                label = "Pista #",
+                                value = candidate.trackNumber.ifBlank { "—" },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
                 }
             }
@@ -468,6 +706,247 @@ fun CandidateDetailedCard(
                 )
             }
         }
+    }
+}
+
+@Composable
+fun CandidatePreviewDialog(
+    candidate: OnlineCandidate,
+    onApply: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = StudioDarkBg,
+            border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(StudioBorder)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Header Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Previsualización",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = StudioTextPrimary
+                        )
+                    )
+
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Cerrar",
+                            tint = StudioTextSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Large Cover Art
+                Box(
+                    modifier = Modifier
+                        .size(180.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(StudioCardSurfaceVariant)
+                        .border(1.dp, StudioBorder, RoundedCornerShape(14.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (!candidate.coverArtUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = candidate.coverArtUrl,
+                            contentDescription = "Carátula completa de ${candidate.title}",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Album,
+                            contentDescription = null,
+                            tint = StudioTextMuted,
+                            modifier = Modifier.size(64.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Title and Artist
+                Text(
+                    text = candidate.title,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = StudioTextPrimary
+                    ),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = candidate.artist,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        color = EmeraldAccent
+                    ),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Source and Match Score Badges
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val badgeColor = when (candidate.source) {
+                        MetadataSource.MUSICBRAINZ -> VioletAccent
+                        MetadataSource.ITUNES -> RoseAccent
+                        MetadataSource.DEEZER -> CyanAccent
+                        MetadataSource.MANUAL -> EmeraldAccent
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = badgeColor.copy(alpha = 0.2f)
+                    ) {
+                        Text(
+                            text = "Fuente: ${candidate.source.displayName}",
+                            color = badgeColor,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
+
+                    if (candidate.matchScore > 0) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = EmeraldDark.copy(alpha = 0.2f)
+                        ) {
+                            Text(
+                                text = "${candidate.matchScore}% Coincidencia",
+                                color = EmeraldAccent,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Detailed Table of Metadata to Apply
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = StudioCardSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        DialogFieldRow("Álbum", candidate.album.ifBlank { "—" })
+                        DialogFieldRow("Artista del Álbum", candidate.albumArtist.ifBlank { candidate.artist.ifBlank { "—" } })
+                        DialogFieldRow("Año de Lanzamiento", candidate.year.ifBlank { "—" })
+                        DialogFieldRow("Género", candidate.genre.ifBlank { "—" })
+                        DialogFieldRow("Número de Pista", candidate.trackNumber.ifBlank { "—" })
+                        if (candidate.discNumber.isNotBlank()) {
+                            DialogFieldRow("Número de Disco", candidate.discNumber)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Actions: Cancel & Apply
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                    ) {
+                        Text(
+                            text = "Cancelar",
+                            color = StudioTextSecondary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    Button(
+                        onClick = onApply,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = EmeraldAccent,
+                            contentColor = Color.Black
+                        ),
+                        modifier = Modifier
+                            .weight(1.3f)
+                            .height(44.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Aplicar",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DialogFieldRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            color = StudioTextMuted
+        )
+        Text(
+            text = value,
+            fontSize = 13.sp,
+            color = StudioTextPrimary,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 180.dp),
+            textAlign = TextAlign.End
+        )
     }
 }
 

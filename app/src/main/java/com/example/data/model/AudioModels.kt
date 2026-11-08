@@ -93,10 +93,12 @@ data class LyricsResult(
     val source: String = "LRCLIB"
 ) {
     val bestLyrics: String
-        get() = when {
-            !syncedLyrics.isNullOrBlank() -> syncedLyrics
-            !plainLyrics.isNullOrBlank() -> plainLyrics
-            else -> ""
+        get() {
+            val s = syncedLyrics?.trim()
+            if (!s.isNullOrBlank() && !s.equals("null", ignoreCase = true)) return s
+            val p = plainLyrics?.trim()
+            if (!p.isNullOrBlank() && !p.equals("null", ignoreCase = true)) return p
+            return ""
         }
 }
 

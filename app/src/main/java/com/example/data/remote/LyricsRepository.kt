@@ -21,6 +21,13 @@ class LyricsRepository {
 
     private val userAgent = "SoundID/1.0.0 ( Android; contact@soundid.app )"
 
+    private fun optCleanLyrics(obj: JSONObject, key: String): String? {
+        if (!obj.has(key) || obj.isNull(key)) return null
+        val raw = obj.optString(key, "").trim()
+        if (raw.isEmpty() || raw.equals("null", ignoreCase = true)) return null
+        return raw
+    }
+
     suspend fun fetchLyrics(
         trackName: String,
         artistName: String,
@@ -51,8 +58,8 @@ class LyricsRepository {
                     val body = response.body?.string()
                     if (body != null) {
                         val obj = JSONObject(body)
-                        val plain = obj.optString("plainLyrics", null)
-                        val synced = obj.optString("syncedLyrics", null)
+                        val plain = optCleanLyrics(obj, "plainLyrics")
+                        val synced = optCleanLyrics(obj, "syncedLyrics")
                         if (!plain.isNullOrBlank() || !synced.isNullOrBlank()) {
                             return@withContext LyricsResult(
                                 trackName = obj.optString("trackName", trackName),
@@ -86,8 +93,8 @@ class LyricsRepository {
                         val arr = JSONArray(body)
                         if (arr.length() > 0) {
                             val first = arr.getJSONObject(0)
-                            val plain = first.optString("plainLyrics", null)
-                            val synced = first.optString("syncedLyrics", null)
+                            val plain = optCleanLyrics(first, "plainLyrics")
+                            val synced = optCleanLyrics(first, "syncedLyrics")
                             if (!plain.isNullOrBlank() || !synced.isNullOrBlank()) {
                                 return@withContext LyricsResult(
                                     trackName = first.optString("trackName", trackName),

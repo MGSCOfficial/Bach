@@ -107,8 +107,8 @@ class FolderManager(private val context: Context) {
                         sizeBytes = tObj.optLong("size", 0L),
                         hasCover = tObj.optBoolean("hasCover", false),
                         hasLyrics = tObj.optBoolean("hasLyrics", false),
-                        parentFolderUri = tObj.optString("parentFolder", null),
-                        treeUriString = tObj.optString("treeUri", null),
+                        parentFolderUri = tObj.optString("parentFolder", "").ifEmpty { null },
+                        treeUriString = tObj.optString("treeUri", "").ifEmpty { null },
                         dateModified = tObj.optLong("modified", System.currentTimeMillis())
                     )
                 )
@@ -301,7 +301,7 @@ class FolderManager(private val context: Context) {
     }
 
     fun saveLrcFile(track: AudioTrack, lyricsText: String): Boolean {
-        if (lyricsText.isBlank()) return false
+        if (lyricsText.isBlank() || lyricsText.trim().equals("null", ignoreCase = true)) return false
         val parentUriStr = track.parentFolderUri ?: return false
 
         try {

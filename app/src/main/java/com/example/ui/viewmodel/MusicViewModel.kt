@@ -8,7 +8,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.model.*
 import com.example.data.remote.LyricsRepository
 import com.example.data.remote.OnlineMetadataRepository
+import com.example.data.storage.AppSettings
 import com.example.data.storage.FolderManager
+import com.example.data.storage.SettingsManager
+import com.example.data.storage.ThemeMode
 import com.example.data.tagger.AudioTagReader
 import com.example.data.tagger.AudioTagWriter
 import com.example.player.AudioPreviewPlayer
@@ -67,12 +70,41 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val lyricsRepo = LyricsRepository()
     val folderManager = FolderManager(application)
     val audioPlayer = AudioPreviewPlayer(application)
+    val settingsManager = SettingsManager(application)
+
+    private val _settings = MutableStateFlow(settingsManager.loadSettings())
+    val settings: StateFlow<AppSettings> = _settings.asStateFlow()
 
     private val _libraryState = MutableStateFlow(LibraryUiState())
     val libraryState: StateFlow<LibraryUiState> = _libraryState.asStateFlow()
 
     private val _editorState = MutableStateFlow(EditorUiState())
     val editorState: StateFlow<EditorUiState> = _editorState.asStateFlow()
+
+    fun updateThemeMode(mode: ThemeMode) {
+        settingsManager.setThemeMode(mode)
+        _settings.update { it.copy(themeMode = mode) }
+    }
+
+    fun updateDynamicColor(enabled: Boolean) {
+        settingsManager.setDynamicColor(enabled)
+        _settings.update { it.copy(dynamicColor = enabled) }
+    }
+
+    fun updateAutoSearchLyrics(enabled: Boolean) {
+        settingsManager.setAutoSearchLyrics(enabled)
+        _settings.update { it.copy(autoSearchLyrics = enabled) }
+    }
+
+    fun updateDefaultSaveLrc(enabled: Boolean) {
+        settingsManager.setDefaultSaveLrc(enabled)
+        _settings.update { it.copy(defaultSaveLrc = enabled) }
+    }
+
+    fun updateDefaultEmbedLyrics(enabled: Boolean) {
+        settingsManager.setDefaultEmbedLyrics(enabled)
+        _settings.update { it.copy(defaultEmbedLyrics = enabled) }
+    }
 
     init {
         loadInitialLibrary()
@@ -281,8 +313,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             draftTrack = track.copy(),
             selectedCoverOption = initialCover,
             coverArtOptions = if (initialCover != null) listOf(initialCover) else emptyList(),
-            saveLrcFile = true,
-            embedLyrics = true
+            saveLrcFile = _settings.value.defaultSaveLrc,
+            embedLyrics = _settings.value.defaultEmbedLyrics
         )
 
         // If track hasCover is true but cover bytes were not loaded during quick scan, load on demand
@@ -429,8 +461,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
 
-            // 3. Search and auto-populate lyrics from LRCLIB
-            searchLyricsForCurrentTrack()
+            // 3. Search and auto-populate lyrics from LRCLIB if enabled in settings
+            if (_settings.value.autoSearchLyrics) {
+                searchLyricsForCurrentTrack()
+            }
         }
     }
 
@@ -449,14 +483,16 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
             _editorState.update { state ->
                 val curDraft = state.draftTrack ?: return@update state
-                if (result != null && result.bestLyrics.isNotBlank()) {
+                val clean = result?.bestLyrics?.trim().orEmpty()
+                val hasValid = result != null && clean.isNotBlank() && !clean.equals("null", ignoreCase = true)
+                if (hasValid) {
                     state.copy(
                         isSearchingLyrics = false,
                         draftTrack = curDraft.copy(
-                            lyrics = result.bestLyrics,
+                            lyrics = clean,
                             hasLyrics = true
                         ),
-                        saveNotification = "Letra encontrada y asignada (${result.source})."
+                        saveNotification = "Letra encontrada y asignada (${result?.source})."
                     )
                 } else {
                     state.copy(
@@ -593,18 +629,22 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 else -> original.coverArtBytes
             }
 
+            val cleanLyrics = draft.lyrics.trim()
+            val hasValidLyrics = cleanLyrics.isNotBlank() && !cleanLyrics.equals("null", ignoreCase = true)
+            val lyricsToEmbed = if (embedLyrics && hasValidLyrics) cleanLyrics else if (embedLyrics && draft.lyrics.isBlank()) "" else null
+
             // 1. Write tags directly to original file via ContentResolver SAF stream
             val success = AudioTagWriter.writeTagsDirectly(
                 context = getApplication(),
                 track = original,
                 updatedTrack = draft,
                 coverBytes = coverBytes,
-                lyricsText = if (embedLyrics) draft.lyrics else null
+                lyricsText = lyricsToEmbed
             )
 
-            // 2. Save .lrc file in folder if requested
-            if (saveLrc && draft.lyrics.isNotBlank()) {
-                val lrcSaved = folderManager.saveLrcFile(original, draft.lyrics)
+            // 2. Save .lrc file in folder if requested and valid lyrics exist
+            if (saveLrc && hasValidLyrics) {
+                val lrcSaved = folderManager.saveLrcFile(original, cleanLyrics)
                 if (lrcSaved) {
                     Log.i("MusicViewModel", "Saved .lrc companion file for ${original.fileName}")
                 }
@@ -614,7 +654,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 val updatedTrack = draft.copy(
                     hasCover = coverBytes != null && coverBytes.isNotEmpty(),
                     coverArtBytes = coverBytes,
-                    hasLyrics = draft.lyrics.isNotBlank(),
+                    hasLyrics = hasValidLyrics,
                     dateModified = System.currentTimeMillis()
                 )
 
