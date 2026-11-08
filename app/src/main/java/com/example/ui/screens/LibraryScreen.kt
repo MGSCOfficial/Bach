@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.AudioTrack
+import com.example.data.model.SortOrder
 import com.example.ui.components.MiniPlayerBar
 import com.example.ui.components.TrackCard
 import com.example.ui.theme.*
@@ -46,6 +47,7 @@ fun LibraryScreen(
 ) {
     val libraryState by viewModel.libraryState.collectAsStateWithLifecycle()
     val playerState by viewModel.audioPlayer.playerState.collectAsStateWithLifecycle()
+    var showSortMenu by remember { mutableStateOf(false) }
 
     // SAF directory picker (ACTION_OPEN_DOCUMENT_TREE)
     val folderPickerLauncher = rememberLauncherForActivityResult(
@@ -54,24 +56,6 @@ fun LibraryScreen(
         if (treeUri != null) {
             viewModel.addMusicFolder(treeUri)
         }
-    }
-
-    // Permission launcher for media audio reading
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            viewModel.rescanSavedFolders()
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            Manifest.permission.READ_MEDIA_AUDIO
-        } else {
-            Manifest.permission.READ_EXTERNAL_STORAGE
-        }
-        permissionLauncher.launch(permission)
     }
 
     val activePlayingTrack = remember(playerState.activeTrackId, libraryState.tracks) {
@@ -122,7 +106,7 @@ fun LibraryScreen(
                     }
                 },
                 actions = {
-                    // Rescan button
+                    // Manual rescan button
                     IconButton(
                         onClick = { viewModel.rescanSavedFolders() },
                         modifier = Modifier.testTag("btn_rescan_folders")
@@ -244,35 +228,96 @@ fun LibraryScreen(
                 Spacer(modifier = Modifier.height(10.dp))
             }
 
-            // Search text field
-            OutlinedTextField(
-                value = libraryState.searchQuery,
-                onValueChange = { viewModel.onSearchQueryChanged(it) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("library_search_input"),
-                placeholder = { Text("Buscar por título, artista o álbum...") },
-                leadingIcon = {
-                    Icon(Icons.Default.Search, contentDescription = null, tint = StudioTextSecondary)
-                },
-                trailingIcon = {
-                    if (libraryState.searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Limpiar", tint = StudioTextSecondary)
+            // Search text field + Sort button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = libraryState.searchQuery,
+                    onValueChange = { viewModel.onSearchQueryChanged(it) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("library_search_input"),
+                    placeholder = { Text("Buscar por título, artista o álbum...") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Search, contentDescription = null, tint = StudioTextSecondary)
+                    },
+                    trailingIcon = {
+                        if (libraryState.searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
+                                Icon(Icons.Default.Clear, contentDescription = "Limpiar", tint = StudioTextSecondary)
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(14.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = EmeraldAccent,
+                        unfocusedBorderColor = StudioBorder,
+                        focusedContainerColor = StudioCardSurface,
+                        unfocusedContainerColor = StudioCardSurface,
+                        focusedTextColor = StudioTextPrimary,
+                        unfocusedTextColor = StudioTextPrimary
+                    ),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Sort Button and Dropdown Menu
+                Box {
+                    IconButton(
+                        onClick = { showSortMenu = true },
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(StudioCardSurface)
+                            .testTag("btn_sort_menu")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Sort,
+                            contentDescription = "Ordenar canciones",
+                            tint = EmeraldAccent,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = showSortMenu,
+                        onDismissRequest = { showSortMenu = false },
+                        modifier = Modifier.background(StudioCardSurfaceVariant)
+                    ) {
+                        Text(
+                            text = "Ordenar por:",
+                            style = MaterialTheme.typography.labelSmall.copy(color = EmeraldAccent, fontWeight = FontWeight.Bold),
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                        )
+
+                        SortOrder.values().forEach { order ->
+                            val isSelected = libraryState.sortOrder == order
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = order.label,
+                                            color = if (isSelected) EmeraldAccent else StudioTextPrimary,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                        if (isSelected) {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Icon(Icons.Default.Check, contentDescription = null, tint = EmeraldAccent, modifier = Modifier.size(16.dp))
+                                        }
+                                    }
+                                },
+                                onClick = {
+                                    viewModel.onSortOrderChanged(order)
+                                    showSortMenu = false
+                                }
+                            )
                         }
                     }
-                },
-                shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = EmeraldAccent,
-                    unfocusedBorderColor = StudioBorder,
-                    focusedContainerColor = StudioCardSurface,
-                    unfocusedContainerColor = StudioCardSurface,
-                    focusedTextColor = StudioTextPrimary,
-                    unfocusedTextColor = StudioTextPrimary
-                ),
-                singleLine = true
-            )
+                }
+            }
 
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -306,7 +351,7 @@ fun LibraryScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Stats info line
+            // Active sort indicator + Track count line
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -317,12 +362,24 @@ fun LibraryScreen(
                     style = MaterialTheme.typography.labelSmall.copy(color = StudioTextMuted)
                 )
 
-                if (libraryState.statusMessage != null) {
-                    Text(
-                        text = libraryState.statusMessage ?: "",
-                        style = MaterialTheme.typography.labelSmall.copy(color = EmeraldAccent),
-                        maxLines = 1
-                    )
+                // Current sort label chip
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = StudioCardSurface,
+                    modifier = Modifier.clickable { showSortMenu = true }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.SwapVert, contentDescription = null, tint = EmeraldAccent, modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = libraryState.sortOrder.label,
+                            color = StudioTextSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
                 }
             }
 
@@ -339,7 +396,7 @@ fun LibraryScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator(color = EmeraldAccent)
                         Spacer(modifier = Modifier.height(12.dp))
-                        Text(text = "Escaneando música en carpetas...", color = StudioTextSecondary, fontSize = 13.sp)
+                        Text(text = "Cargando música...", color = StudioTextSecondary, fontSize = 13.sp)
                     }
                 }
             } else if (libraryState.folders.isEmpty()) {
@@ -391,7 +448,7 @@ fun LibraryScreen(
                             Spacer(modifier = Modifier.height(8.dp))
 
                             Text(
-                                text = "Elige la carpeta de tu dispositivo donde guardas tus canciones MP3 o M4A. Sound ID detectará todos los archivos automáticamente y guardará las portadas y etiquetas directamente en tus archivos.",
+                                text = "Elige la carpeta donde guardas tus canciones MP3 o M4A. Sound ID detectará los archivos en menos de 2 segundos y te permitirá editar carátulas y metadatos con facilidad.",
                                 style = MaterialTheme.typography.bodySmall.copy(color = StudioTextSecondary),
                                 textAlign = TextAlign.Center
                             )

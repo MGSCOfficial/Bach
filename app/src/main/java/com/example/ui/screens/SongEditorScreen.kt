@@ -429,7 +429,56 @@ fun SongEditorScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (editorState.selectedCandidate != null) {
+                val candidate = editorState.selectedCandidate!!
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("active_online_candidate_card"),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = StudioCardSurface),
+                    border = CardDefaults.outlinedCardBorder().copy(
+                        brush = androidx.compose.ui.graphics.SolidColor(EmeraldAccent.copy(alpha = 0.5f))
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(12.dp)
+                            .fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = EmeraldAccent,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Metadatos aplicados de ${candidate.source.displayName}",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = EmeraldAccent,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                            Text(
+                                text = "${candidate.title} — ${candidate.artist} (${candidate.album})",
+                                style = MaterialTheme.typography.bodySmall.copy(color = StudioTextPrimary),
+                                maxLines = 1
+                            )
+                        }
+                        TextButton(
+                            onClick = { viewModel.searchOnlineForCurrentTrack() }
+                        ) {
+                            Text("Cambiar", color = StudioTextSecondary, fontSize = 12.sp)
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
 
             // ==================== LYRICS SECTION (NEW) ====================
             Card(

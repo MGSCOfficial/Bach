@@ -1,16 +1,16 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Album
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -66,17 +66,15 @@ fun OnlineSearchResultsSheet(
             ) {
                 Column {
                     Text(
-                        text = "Resultados en Línea",
+                        text = "Metadatos Encontrados en Línea",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
                             color = StudioTextPrimary
                         )
                     )
                     Text(
-                        text = "MusicBrainz • iTunes • Deezer",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = StudioTextSecondary
-                        )
+                        text = "MusicBrainz • iTunes • Deezer — Toca para aplicar al archivo",
+                        style = MaterialTheme.typography.bodySmall.copy(color = StudioTextSecondary)
                     )
                 }
 
@@ -124,7 +122,9 @@ fun OnlineSearchResultsSheet(
 
             // Source filter chips
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 FilterChip(
@@ -168,20 +168,20 @@ fun OnlineSearchResultsSheet(
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             if (isLoading) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(200.dp),
+                        .height(220.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator(color = EmeraldAccent)
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "Consultando bases de datos libres...",
+                            text = "Consultando MusicBrainz, iTunes y Deezer...",
                             color = StudioTextSecondary,
                             fontSize = 14.sp
                         )
@@ -195,7 +195,7 @@ fun OnlineSearchResultsSheet(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No se encontraron coincidencias. Prueba afinando la búsqueda.",
+                        text = "No se encontraron coincidencias. Prueba ajustando el nombre en el buscador.",
                         color = StudioTextMuted,
                         fontSize = 14.sp
                     )
@@ -205,11 +205,11 @@ fun OnlineSearchResultsSheet(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f, fill = false)
-                        .heightIn(max = 420.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                        .heightIn(max = 480.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(filteredCandidates, key = { it.id }) { candidate ->
-                        CandidateItemCard(
+                        CandidateDetailedCard(
                             candidate = candidate,
                             onSelect = { onSelectCandidate(candidate) }
                         )
@@ -221,120 +221,193 @@ fun OnlineSearchResultsSheet(
 }
 
 @Composable
-fun CandidateItemCard(
+fun CandidateDetailedCard(
     candidate: OnlineCandidate,
     onSelect: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onSelect),
-        shape = RoundedCornerShape(12.dp),
+            .testTag("candidate_card_${candidate.id}"),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = StudioCardSurface),
         border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(StudioBorder))
     ) {
-        Row(
-            modifier = Modifier
-                .padding(12.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Cover Art Thumbnail
-            Box(
-                modifier = Modifier
-                    .size(54.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(StudioCardSurfaceVariant),
-                contentAlignment = Alignment.Center
+        Column(modifier = Modifier.padding(14.dp)) {
+            // Top Row: Cover Thumbnail + Badges + Title/Artist
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
             ) {
-                if (!candidate.coverArtUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = candidate.coverArtUrl,
-                        contentDescription = "Carátula",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.Album,
-                        contentDescription = null,
-                        tint = StudioTextMuted,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                Box(
+                    modifier = Modifier
+                        .size(68.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(StudioCardSurfaceVariant),
+                    contentAlignment = Alignment.Center
                 ) {
-                    // Source badge
-                    val badgeColor = when (candidate.source) {
-                        MetadataSource.MUSICBRAINZ -> VioletAccent
-                        MetadataSource.ITUNES -> RoseAccent
-                        MetadataSource.DEEZER -> CyanAccent
-                        MetadataSource.MANUAL -> EmeraldAccent
-                    }
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = badgeColor.copy(alpha = 0.2f)
-                    ) {
-                        Text(
-                            text = candidate.source.displayName,
-                            color = badgeColor,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    if (!candidate.coverArtUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = candidate.coverArtUrl,
+                            contentDescription = "Carátula de ${candidate.title}",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
                         )
-                    }
-
-                    if (candidate.year.isNotBlank()) {
-                        Text(
-                            text = candidate.year,
-                            color = StudioTextMuted,
-                            fontSize = 11.sp
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Album,
+                            contentDescription = null,
+                            tint = StudioTextMuted,
+                            modifier = Modifier.size(36.dp)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.width(14.dp))
 
-                Text(
-                    text = candidate.title,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = StudioTextPrimary
-                    ),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val badgeColor = when (candidate.source) {
+                            MetadataSource.MUSICBRAINZ -> VioletAccent
+                            MetadataSource.ITUNES -> RoseAccent
+                            MetadataSource.DEEZER -> CyanAccent
+                            MetadataSource.MANUAL -> EmeraldAccent
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = badgeColor.copy(alpha = 0.2f)
+                        ) {
+                            Text(
+                                text = candidate.source.displayName,
+                                color = badgeColor,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
 
-                Text(
-                    text = "${candidate.artist} — ${candidate.album}",
-                    style = MaterialTheme.typography.bodySmall.copy(color = StudioTextSecondary),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                        if (candidate.matchScore > 0) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = EmeraldDark.copy(alpha = 0.2f)
+                            ) {
+                                Text(
+                                    text = "${candidate.matchScore}% Coincidencia",
+                                    color = EmeraldAccent,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = candidate.title,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = StudioTextPrimary
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Text(
+                        text = candidate.artist,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            color = EmeraldAccent
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
+            // Detailed Metadata Grid
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = StudioCardSurfaceVariant,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        MetadataFieldPreview(label = "Álbum", value = candidate.album.ifBlank { "Desconocido" })
+                        if (candidate.year.isNotBlank()) {
+                            MetadataFieldPreview(label = "Año", value = candidate.year)
+                        }
+                    }
+
+                    if (candidate.genre.isNotBlank() || candidate.trackNumber.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            if (candidate.genre.isNotBlank()) {
+                                MetadataFieldPreview(label = "Género", value = candidate.genre)
+                            }
+                            if (candidate.trackNumber.isNotBlank()) {
+                                MetadataFieldPreview(label = "Pista #", value = candidate.trackNumber)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Primary Apply Button
             Button(
                 onClick = onSelect,
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = EmeraldAccent,
                     contentColor = Color.Black
                 ),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(42.dp)
+                    .testTag("btn_apply_candidate_${candidate.id}")
             ) {
-                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Aplicar", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Aplicar Todos los Metadatos y Carátula",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
             }
         }
+    }
+}
+
+@Composable
+fun MetadataFieldPreview(label: String, value: String) {
+    Column {
+        Text(
+            text = label,
+            fontSize = 10.sp,
+            color = StudioTextMuted,
+            fontWeight = FontWeight.Medium
+        )
+        Text(
+            text = value,
+            fontSize = 12.sp,
+            color = StudioTextPrimary,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

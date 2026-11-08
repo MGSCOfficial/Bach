@@ -10,6 +10,19 @@ import java.io.File
 
 object AudioTagReader {
 
+    fun loadEmbeddedPicture(context: Context, uri: Uri): ByteArray? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(context, uri)
+            retriever.embeddedPicture
+        } catch (e: Exception) {
+            Log.w("AudioTagReader", "Could not load embedded picture for $uri", e)
+            null
+        } finally {
+            try { retriever.release() } catch (ignored: Exception) {}
+        }
+    }
+
     fun readTrack(context: Context, uri: Uri, fileName: String, sizeBytes: Long): AudioTrack? {
         val retriever = MediaMetadataRetriever()
         return try {

@@ -1,6 +1,6 @@
 {
-  "summary":  "Plan de actualización para Sound ID: renombrado de la app, escaneo y gestión de carpetas de música con SAF permanente, corrección crítica de guardado real de carátulas y etiquetas directamente en los archivos originales, solución a la selección de metadatos de candidatos online, y nueva función de descarga e incrustación de letras (.lrc y tags USLT/©lyr).",
-  "updatedAt":  "2026-11-08T00:38:45.725649657Z",
+  "summary":  "Plan de optimización y resolución para Sound ID: escaneo ultrarrápido de carpetas de música (de 3 minutos a menos de 2 segundos) mediante consulta por lotes y lector ID3/M4A nativo, eliminación de re-escaneos redundantes tras editar canciones, tarjeta detallada de metadatos de resultados en línea (título, artista, álbum, año, género, pista, portada y letra), y selector completo de ordenamiento (recientes, nombre, artista, álbum, duración).",
+  "updatedAt":  "2026-11-08T03:21:19.583582951Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

@@ -5,15 +5,11 @@ import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.data.model.AudioFormat
-import com.example.data.model.AudioTrack
-import com.example.data.model.CoverArtOption
-import com.example.data.model.MusicFolder
-import com.example.data.model.OnlineCandidate
-import com.example.data.model.TagDiff
+import com.example.data.model.*
 import com.example.data.remote.LyricsRepository
 import com.example.data.remote.OnlineMetadataRepository
 import com.example.data.storage.FolderManager
+import com.example.data.tagger.AudioTagReader
 import com.example.data.tagger.AudioTagWriter
 import com.example.player.AudioPreviewPlayer
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +35,7 @@ data class LibraryUiState(
     val filteredTracks: List<AudioTrack> = emptyList(),
     val searchQuery: String = "",
     val activeFilter: LibraryFilter = LibraryFilter.ALL,
+    val sortOrder: SortOrder = SortOrder.RECENTLY_MODIFIED,
     val isLoading: Boolean = false,
     val statusMessage: String? = null
 )
@@ -77,10 +74,41 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     val editorState: StateFlow<EditorUiState> = _editorState.asStateFlow()
 
     init {
-        rescanSavedFolders()
+        loadInitialLibrary()
     }
 
-    // ==================== FOLDER & LIBRARY MANAGEMENT ====================
+    // ==================== FAST LIBRARY INITIALIZATION & SCAN ====================
+
+    private fun loadInitialLibrary() {
+        viewModelScope.launch {
+            // 1. Instantly load from local JSON cache (< 10ms)
+            val (cachedFolders, cachedTracks) = folderManager.loadCachedTracks()
+            if (cachedTracks.isNotEmpty()) {
+                _libraryState.update { state ->
+                    state.copy(
+                        folders = cachedFolders,
+                        tracks = cachedTracks,
+                        filteredTracks = applyFilterSearchAndSort(
+                            cachedTracks,
+                            state.activeFilter,
+                            state.searchQuery,
+                            state.sortOrder
+                        ),
+                        isLoading = false,
+                        statusMessage = "${cachedTracks.size} canciones cargadas al instante."
+                    )
+                }
+            } else {
+                // If cache is empty but we have saved folders, run initial fast scan
+                val savedUris = folderManager.getSavedFolderUris()
+                if (savedUris.isNotEmpty()) {
+                    rescanSavedFolders()
+                } else {
+                    _libraryState.update { it.copy(statusMessage = "Selecciona una carpeta para comenzar.") }
+                }
+            }
+        }
+    }
 
     fun rescanSavedFolders() {
         viewModelScope.launch {
@@ -90,7 +118,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 state.copy(
                     folders = folders,
                     tracks = tracks,
-                    filteredTracks = applyFilterAndSearch(tracks, state.activeFilter, state.searchQuery),
+                    filteredTracks = applyFilterSearchAndSort(
+                        tracks,
+                        state.activeFilter,
+                        state.searchQuery,
+                        state.sortOrder
+                    ),
                     isLoading = false,
                     statusMessage = if (folders.isEmpty()) {
                         "Selecciona una carpeta para cargar tu música."
@@ -104,16 +137,21 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun addMusicFolder(treeUri: Uri) {
         viewModelScope.launch {
-            _libraryState.update { it.copy(isLoading = true, statusMessage = "Vinculando carpeta...") }
+            _libraryState.update { it.copy(isLoading = true, statusMessage = "Analizando carpeta...") }
             folderManager.addFolderUri(treeUri)
             val (folders, tracks) = folderManager.scanFolders()
             _libraryState.update { state ->
                 state.copy(
                     folders = folders,
                     tracks = tracks,
-                    filteredTracks = applyFilterAndSearch(tracks, state.activeFilter, state.searchQuery),
+                    filteredTracks = applyFilterSearchAndSort(
+                        tracks,
+                        state.activeFilter,
+                        state.searchQuery,
+                        state.sortOrder
+                    ),
                     isLoading = false,
-                    statusMessage = "Carpeta añadida con ${tracks.size} canciones encontradas."
+                    statusMessage = "Carpeta añadida con ${tracks.size} canciones."
                 )
             }
         }
@@ -127,18 +165,30 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 state.copy(
                     folders = folders,
                     tracks = tracks,
-                    filteredTracks = applyFilterAndSearch(tracks, state.activeFilter, state.searchQuery),
+                    filteredTracks = applyFilterSearchAndSort(
+                        tracks,
+                        state.activeFilter,
+                        state.searchQuery,
+                        state.sortOrder
+                    ),
                     statusMessage = "Carpeta desvinculada."
                 )
             }
         }
     }
 
+    // ==================== SEARCH, FILTER & SORT ====================
+
     fun onSearchQueryChanged(query: String) {
         _libraryState.update { state ->
             state.copy(
                 searchQuery = query,
-                filteredTracks = applyFilterAndSearch(state.tracks, state.activeFilter, query)
+                filteredTracks = applyFilterSearchAndSort(
+                    state.tracks,
+                    state.activeFilter,
+                    query,
+                    state.sortOrder
+                )
             )
         }
     }
@@ -147,16 +197,37 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         _libraryState.update { state ->
             state.copy(
                 activeFilter = filter,
-                filteredTracks = applyFilterAndSearch(state.tracks, filter, state.searchQuery)
+                filteredTracks = applyFilterSearchAndSort(
+                    state.tracks,
+                    filter,
+                    state.searchQuery,
+                    state.sortOrder
+                )
             )
         }
     }
 
-    private fun applyFilterAndSearch(
+    fun onSortOrderChanged(order: SortOrder) {
+        _libraryState.update { state ->
+            state.copy(
+                sortOrder = order,
+                filteredTracks = applyFilterSearchAndSort(
+                    state.tracks,
+                    state.activeFilter,
+                    state.searchQuery,
+                    order
+                )
+            )
+        }
+    }
+
+    private fun applyFilterSearchAndSort(
         tracks: List<AudioTrack>,
         filter: LibraryFilter,
-        query: String
+        query: String,
+        sortOrder: SortOrder
     ): List<AudioTrack> {
+        // 1. Filter
         val filtered = when (filter) {
             LibraryFilter.ALL -> tracks
             LibraryFilter.MISSING_COVER -> tracks.filter { !it.hasCover }
@@ -166,13 +237,29 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             LibraryFilter.M4A_ONLY -> tracks.filter { it.format == AudioFormat.M4A }
         }
 
-        if (query.isBlank()) return filtered
-        val q = query.trim().lowercase()
-        return filtered.filter {
-            it.displayTitle.lowercase().contains(q) ||
-                    it.displayArtist.lowercase().contains(q) ||
-                    it.displayAlbum.lowercase().contains(q) ||
-                    it.fileName.lowercase().contains(q)
+        // 2. Search
+        val searched = if (query.isBlank()) {
+            filtered
+        } else {
+            val q = query.trim().lowercase()
+            filtered.filter {
+                it.displayTitle.lowercase().contains(q) ||
+                        it.displayArtist.lowercase().contains(q) ||
+                        it.displayAlbum.lowercase().contains(q) ||
+                        it.fileName.lowercase().contains(q)
+            }
+        }
+
+        // 3. Sort
+        return when (sortOrder) {
+            SortOrder.RECENTLY_MODIFIED -> searched.sortedByDescending { it.dateModified }
+            SortOrder.TITLE_ASC -> searched.sortedBy { it.displayTitle.lowercase() }
+            SortOrder.TITLE_DESC -> searched.sortedByDescending { it.displayTitle.lowercase() }
+            SortOrder.ARTIST_ASC -> searched.sortedBy { it.displayArtist.lowercase() }
+            SortOrder.ALBUM_ASC -> searched.sortedBy { it.displayAlbum.lowercase() }
+            SortOrder.DURATION_DESC -> searched.sortedByDescending { it.durationMs }
+            SortOrder.DURATION_ASC -> searched.sortedBy { it.durationMs }
+            SortOrder.SIZE_DESC -> searched.sortedByDescending { it.sizeBytes }
         }
     }
 
@@ -196,6 +283,29 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             saveLrcFile = true,
             embedLyrics = true
         )
+
+        // If track hasCover is true but cover bytes were not loaded during quick scan, load on demand
+        if (track.hasCover && track.coverArtBytes == null) {
+            viewModelScope.launch(Dispatchers.IO) {
+                val bytes = AudioTagReader.loadEmbeddedPicture(getApplication(), Uri.parse(track.fileUri))
+                if (bytes != null && bytes.isNotEmpty()) {
+                    _editorState.update { state ->
+                        val updatedDraft = state.draftTrack?.copy(coverArtBytes = bytes, hasCover = true)
+                        val opt = CoverArtOption(
+                            source = "Actual del archivo",
+                            bytes = bytes,
+                            label = "Carátula incrustada (${bytes.size / 1024} KB)",
+                            isSelected = true
+                        )
+                        state.copy(
+                            draftTrack = updatedDraft,
+                            selectedCoverOption = opt,
+                            coverArtOptions = listOf(opt)
+                        )
+                    }
+                }
+            }
+        }
     }
 
     fun closeTrackEditor() {
@@ -284,7 +394,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                         discNumber = candidate.discNumber.ifBlank { draft.discNumber }
                     ),
                     isLoadingCovers = true,
-                    saveNotification = "Metadatos de '${candidate.title}' aplicados al borrador."
+                    saveNotification = "Metadatos aplicados: ${candidate.title} — ${candidate.artist}"
                 )
             }
 
@@ -350,7 +460,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     state.copy(
                         isSearchingLyrics = false,
-                        saveNotification = "No se encontró letra automática para esta pista."
+                        saveNotification = "No se encontró letra en línea para esta canción."
                     )
                 }
             }
@@ -507,14 +617,22 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     dateModified = System.currentTimeMillis()
                 )
 
+                // 3. Atomically update ONLY this track in memory and in cache (NO FULL RESCAN!)
+                folderManager.updateSingleTrackInCache(updatedTrack)
+
                 _libraryState.update { state ->
                     val updatedList = state.tracks.map {
-                        if (it.id == original.id) updatedTrack else it
+                        if (it.id == original.id || it.fileUri == original.fileUri) updatedTrack else it
                     }
                     state.copy(
                         tracks = updatedList,
-                        filteredTracks = applyFilterAndSearch(updatedList, state.activeFilter, state.searchQuery),
-                        statusMessage = "¡Etiquetas y carátula guardadas en ${original.fileName}!"
+                        filteredTracks = applyFilterSearchAndSort(
+                            updatedList,
+                            state.activeFilter,
+                            state.searchQuery,
+                            state.sortOrder
+                        ),
+                        statusMessage = "¡Guardado exitosamente en ${original.fileName}!"
                     )
                 }
 
@@ -524,7 +642,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                         showDiffDialog = false,
                         originalTrack = updatedTrack,
                         draftTrack = updatedTrack.copy(),
-                        saveNotification = "¡Archivo actualizado con éxito en el almacenamiento!"
+                        saveNotification = "¡Archivo actualizado con éxito en tu carpeta!"
                     )
                 }
             } else {
