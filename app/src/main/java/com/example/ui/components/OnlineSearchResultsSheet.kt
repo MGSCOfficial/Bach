@@ -64,59 +64,106 @@ fun OnlineSearchResultsSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(
-                        text = "Metadatos Encontrados en Línea",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = StudioTextPrimary
-                        )
+                Text(
+                    text = "Resultados en línea",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = StudioTextPrimary
                     )
-                    Text(
-                        text = "MusicBrainz • iTunes • Deezer — Toca para aplicar al archivo",
-                        style = MaterialTheme.typography.bodySmall.copy(color = StudioTextSecondary)
-                    )
-                }
+                )
 
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = StudioTextSecondary)
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Cerrar",
+                        tint = StudioTextSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Search query input field
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("online_search_input"),
-                placeholder = { Text("Buscar por artista o título...") },
-                leadingIcon = {
-                    Icon(Icons.Default.Search, contentDescription = null, tint = EmeraldAccent)
-                },
-                trailingIcon = {
-                    Button(
-                        onClick = { onSearchQuery(searchQuery) },
-                        colors = ButtonDefaults.buttonColors(containerColor = EmeraldAccent),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                        modifier = Modifier.padding(end = 6.dp)
-                    ) {
-                        Text("Buscar", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
-                },
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = EmeraldAccent,
-                    unfocusedBorderColor = StudioBorder,
-                    focusedContainerColor = StudioCardSurface,
-                    unfocusedContainerColor = StudioCardSurface,
-                    focusedTextColor = StudioTextPrimary,
-                    unfocusedTextColor = StudioTextPrimary
-                ),
-                singleLine = true
-            )
+            // Search query input field with external compact search button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp)
+                        .testTag("online_search_input"),
+                    placeholder = {
+                        Text(
+                            text = "Buscar por artista o título...",
+                            fontSize = 13.sp,
+                            color = StudioTextMuted
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = EmeraldAccent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(
+                                onClick = { searchQuery = "" },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Clear,
+                                    contentDescription = "Limpiar",
+                                    tint = StudioTextSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = StudioCardSurface,
+                        unfocusedContainerColor = StudioCardSurface,
+                        focusedTextColor = StudioTextPrimary,
+                        unfocusedTextColor = StudioTextPrimary,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent
+                    ),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Search
+                    ),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                        onSearch = { onSearchQuery(searchQuery) }
+                    ),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Button(
+                    onClick = { onSearchQuery(searchQuery) },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = EmeraldAccent),
+                    contentPadding = PaddingValues(horizontal = 14.dp),
+                    modifier = Modifier.height(44.dp)
+                ) {
+                    Text(
+                        text = "Buscar",
+                        color = Color.Black,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -331,43 +378,55 @@ fun CandidateDetailedCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Detailed Metadata Grid
+            // Symmetrical, well-structured Metadata Grid
             Surface(
                 shape = RoundedCornerShape(10.dp),
                 color = StudioCardSurfaceVariant,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(10.dp)) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    // Row 1: Álbum + Año
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        MetadataFieldPreview(label = "Álbum", value = candidate.album.ifBlank { "Desconocido" })
-                        if (candidate.year.isNotBlank()) {
-                            MetadataFieldPreview(label = "Año", value = candidate.year)
-                        }
+                        MetadataFieldPreview(
+                            label = "Álbum",
+                            value = candidate.album.ifBlank { "Desconocido" },
+                            modifier = Modifier.weight(1f)
+                        )
+                        MetadataFieldPreview(
+                            label = "Año",
+                            value = candidate.year.ifBlank { "—" },
+                            modifier = Modifier.weight(1f)
+                        )
                     }
 
-                    if (candidate.genre.isNotBlank() || candidate.trackNumber.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            if (candidate.genre.isNotBlank()) {
-                                MetadataFieldPreview(label = "Género", value = candidate.genre)
-                            }
-                            if (candidate.trackNumber.isNotBlank()) {
-                                MetadataFieldPreview(label = "Pista #", value = candidate.trackNumber)
-                            }
-                        }
+                    // Row 2: Género + Pista #
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        MetadataFieldPreview(
+                            label = "Género",
+                            value = candidate.genre.ifBlank { "—" },
+                            modifier = Modifier.weight(1f)
+                        )
+                        MetadataFieldPreview(
+                            label = "Pista #",
+                            value = candidate.trackNumber.ifBlank { "—" },
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Primary Apply Button
+            // Primary Apply Button (concise text, no clipping)
             Button(
                 onClick = onSelect,
                 shape = RoundedCornerShape(10.dp),
@@ -380,12 +439,17 @@ fun CandidateDetailedCard(
                     .height(42.dp)
                     .testTag("btn_apply_candidate_${candidate.id}")
             ) {
-                Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "Aplicar Todos los Metadatos y Carátula",
+                    text = "Aplicar metadatos",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
+                    fontSize = 13.sp,
+                    maxLines = 1
                 )
             }
         }
@@ -393,8 +457,12 @@ fun CandidateDetailedCard(
 }
 
 @Composable
-fun MetadataFieldPreview(label: String, value: String) {
-    Column {
+fun MetadataFieldPreview(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
         Text(
             text = label,
             fontSize = 10.sp,
@@ -404,7 +472,7 @@ fun MetadataFieldPreview(label: String, value: String) {
         Text(
             text = value,
             fontSize = 12.sp,
-            color = StudioTextPrimary,
+            color = if (value == "—") StudioTextMuted else StudioTextPrimary,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
