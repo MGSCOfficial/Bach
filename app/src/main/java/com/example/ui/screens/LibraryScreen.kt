@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
@@ -25,7 +26,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -234,33 +237,55 @@ fun LibraryScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                TextField(
-                    value = libraryState.searchQuery,
-                    onValueChange = { viewModel.onSearchQueryChanged(it) },
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = StudioCardSurface,
                     modifier = Modifier
                         .weight(1f)
                         .height(44.dp)
-                        .testTag("library_search_input"),
-                    placeholder = {
-                        Text(
-                            text = "Buscar canción, artista o álbum...",
-                            fontSize = 13.sp,
-                            color = StudioTextMuted
-                        )
-                    },
-                    leadingIcon = {
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = null,
                             tint = StudioTextSecondary,
                             modifier = Modifier.size(18.dp)
                         )
-                    },
-                    trailingIcon = {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            if (libraryState.searchQuery.isEmpty()) {
+                                Text(
+                                    text = "Buscar canción, artista o álbum...",
+                                    fontSize = 13.sp,
+                                    color = StudioTextMuted
+                                )
+                            }
+                            BasicTextField(
+                                value = libraryState.searchQuery,
+                                onValueChange = { viewModel.onSearchQueryChanged(it) },
+                                textStyle = TextStyle(
+                                    color = StudioTextPrimary,
+                                    fontSize = 13.sp
+                                ),
+                                singleLine = true,
+                                cursorBrush = SolidColor(EmeraldAccent),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("library_search_input")
+                            )
+                        }
                         if (libraryState.searchQuery.isNotEmpty()) {
                             IconButton(
                                 onClick = { viewModel.onSearchQueryChanged("") },
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(24.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Clear,
@@ -270,18 +295,8 @@ fun LibraryScreen(
                                 )
                             }
                         }
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = StudioCardSurface,
-                        unfocusedContainerColor = StudioCardSurface,
-                        focusedTextColor = StudioTextPrimary,
-                        unfocusedTextColor = StudioTextPrimary,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent
-                    ),
-                    singleLine = true
-                )
+                    }
+                }
 
                 Spacer(modifier = Modifier.width(8.dp))
 

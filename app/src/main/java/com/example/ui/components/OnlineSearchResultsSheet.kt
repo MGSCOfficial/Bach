@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -17,8 +18,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -92,33 +95,61 @@ fun OnlineSearchResultsSheet(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                TextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = StudioCardSurface,
                     modifier = Modifier
                         .weight(1f)
                         .height(44.dp)
-                        .testTag("online_search_input"),
-                    placeholder = {
-                        Text(
-                            text = "Buscar por artista o título...",
-                            fontSize = 13.sp,
-                            color = StudioTextMuted
-                        )
-                    },
-                    leadingIcon = {
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = null,
                             tint = EmeraldAccent,
                             modifier = Modifier.size(18.dp)
                         )
-                    },
-                    trailingIcon = {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            if (searchQuery.isEmpty()) {
+                                Text(
+                                    text = "Buscar por artista o título...",
+                                    fontSize = 13.sp,
+                                    color = StudioTextMuted
+                                )
+                            }
+                            BasicTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                textStyle = TextStyle(
+                                    color = StudioTextPrimary,
+                                    fontSize = 13.sp
+                                ),
+                                singleLine = true,
+                                cursorBrush = SolidColor(EmeraldAccent),
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                    imeAction = androidx.compose.ui.text.input.ImeAction.Search
+                                ),
+                                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                    onSearch = { onSearchQuery(searchQuery) }
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("online_search_input")
+                            )
+                        }
                         if (searchQuery.isNotEmpty()) {
                             IconButton(
                                 onClick = { searchQuery = "" },
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(24.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Clear,
@@ -128,24 +159,8 @@ fun OnlineSearchResultsSheet(
                                 )
                             }
                         }
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = StudioCardSurface,
-                        unfocusedContainerColor = StudioCardSurface,
-                        focusedTextColor = StudioTextPrimary,
-                        unfocusedTextColor = StudioTextPrimary,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent
-                    ),
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                        imeAction = androidx.compose.ui.text.input.ImeAction.Search
-                    ),
-                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                        onSearch = { onSearchQuery(searchQuery) }
-                    ),
-                    singleLine = true
-                )
+                    }
+                }
 
                 Spacer(modifier = Modifier.width(8.dp))
 
