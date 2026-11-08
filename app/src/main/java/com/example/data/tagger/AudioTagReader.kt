@@ -45,8 +45,7 @@ object AudioTagReader {
                 durationMs = durationMs,
                 sizeBytes = sizeBytes,
                 hasCover = coverBytes != null && coverBytes.isNotEmpty(),
-                coverArtBytes = coverBytes,
-                isDemoTrack = uri.toString().startsWith("demo://")
+                coverArtBytes = coverBytes
             )
         } catch (e: Exception) {
             Log.e("AudioTagReader", "Error reading metadata for $fileName", e)
@@ -99,8 +98,7 @@ object AudioTagReader {
                 durationMs = durationMs,
                 sizeBytes = file.length(),
                 hasCover = coverBytes != null && coverBytes.isNotEmpty(),
-                coverArtBytes = coverBytes,
-                isDemoTrack = false
+                coverArtBytes = coverBytes
             )
         } catch (e: Exception) {
             Log.e("AudioTagReader", "Error reading file ${file.name}", e)

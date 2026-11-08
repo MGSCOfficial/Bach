@@ -20,7 +20,7 @@ class AudioTagWriterTest {
     }
 
     @Test
-    fun testMp3TagWritingGeneratesValidId3v2Header() {
+    fun testMp3TagWritingGeneratesValidId3v2HeaderAndLyrics() {
         val dummyAudio = ByteArray(100) { 0x55.toByte() }
         val dummyCover = ByteArray(64) { 0xAA.toByte() }
 
@@ -33,13 +33,15 @@ class AudioTagWriterTest {
             album = "A Night at the Opera",
             year = "1975",
             genre = "Rock",
-            trackNumber = "1"
+            trackNumber = "1",
+            lyrics = "Is this the real life? Is this just fantasy?"
         )
 
         val taggedBytes = AudioTagWriter.writeMp3Tags(
             originalBytes = dummyAudio,
             track = track,
-            coverBytes = dummyCover
+            coverBytes = dummyCover,
+            lyricsText = track.lyrics
         )
 
         // Must start with ID3 header
@@ -61,10 +63,12 @@ class AudioTagWriterTest {
         assertTrue(stringContent.contains("TCON"))
         assertTrue(stringContent.contains("Rock"))
         assertTrue(stringContent.contains("APIC")) // Cover art frame
+        assertTrue(stringContent.contains("USLT")) // Embedded Lyrics frame
+        assertTrue(stringContent.contains("Is this the real life?"))
     }
 
     @Test
-    fun testM4aTagWritingInjectsUdtaAtom() {
+    fun testM4aTagWritingInjectsUdtaAtomAndLyrics() {
         // Construct a minimal dummy M4A file with ftyp, moov, and mdat atoms
         val ftyp = ByteBuffer.allocate(16).order(ByteOrder.BIG_ENDIAN)
             .putInt(16)
@@ -97,13 +101,15 @@ class AudioTagWriterTest {
             album = "Thriller",
             year = "1982",
             genre = "Pop",
-            trackNumber = "2"
+            trackNumber = "2",
+            lyrics = "She was more like a beauty queen from a movie scene"
         )
 
         val taggedBytes = AudioTagWriter.writeM4aTags(
             originalBytes = dummyM4a,
             track = track,
-            coverBytes = null
+            coverBytes = null,
+            lyricsText = track.lyrics
         )
 
         val stringContent = String(taggedBytes, Charsets.ISO_8859_1)
@@ -117,5 +123,7 @@ class AudioTagWriterTest {
         assertTrue(stringContent.contains("Michael Jackson"))
         assertTrue(stringContent.contains("\u00a9alb")) // Album atom
         assertTrue(stringContent.contains("Thriller"))
+        assertTrue(stringContent.contains("\u00a9lyr")) // Lyrics atom
+        assertTrue(stringContent.contains("She was more like a beauty queen"))
     }
 }

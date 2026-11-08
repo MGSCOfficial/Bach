@@ -30,7 +30,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.data.model.AudioFormat
-import com.example.data.model.AudioTrack
 import com.example.ui.components.CoverArtPickerSheet
 import com.example.ui.components.OnlineSearchResultsSheet
 import com.example.ui.components.PreviewDiffDialog
@@ -88,7 +87,7 @@ fun SongEditorScreen(
                 title = {
                     Column {
                         Text(
-                            text = "Editor de Metadatos",
+                            text = "Sound ID — Editor",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = StudioTextPrimary
@@ -117,7 +116,6 @@ fun SongEditorScreen(
                     }
                 },
                 actions = {
-                    // Format badge
                     Surface(
                         shape = RoundedCornerShape(6.dp),
                         color = if (draft.format == AudioFormat.MP3) EmeraldDark else VioletDark,
@@ -132,7 +130,6 @@ fun SongEditorScreen(
                         )
                     }
 
-                    // Quick Preview Diff Button
                     IconButton(
                         onClick = { viewModel.showDiffPreview() },
                         modifier = Modifier.testTag("preview_diff_action")
@@ -177,17 +174,24 @@ fun SongEditorScreen(
                     }
 
                     Button(
-                        onClick = { viewModel.showDiffPreview() },
+                        onClick = { viewModel.applyAndSaveTags() },
                         modifier = Modifier
-                            .weight(1.2f)
+                            .weight(1.3f)
                             .height(48.dp)
                             .testTag("btn_save_tags"),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = EmeraldAccent)
+                        colors = ButtonDefaults.buttonColors(containerColor = EmeraldAccent),
+                        enabled = !editorState.isSaving
                     ) {
-                        Icon(Icons.Default.Save, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Guardar Cambios", color = Color.Black, fontWeight = FontWeight.Bold)
+                        if (editorState.isSaving) {
+                            CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Guardando...", color = Color.Black, fontWeight = FontWeight.Bold)
+                        } else {
+                            Icon(Icons.Default.Save, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Guardar en Archivo", color = Color.Black, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -213,7 +217,6 @@ fun SongEditorScreen(
                     modifier = Modifier.padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Cover Image Display
                     Box(
                         modifier = Modifier
                             .size(200.dp)
@@ -223,11 +226,14 @@ fun SongEditorScreen(
                             .testTag("album_cover_preview"),
                         contentAlignment = Alignment.Center
                     ) {
-                        val selectedCover = editorState.selectedCoverOption
-                        if (selectedCover?.bytes != null) {
-                            val bitmap = remember(selectedCover.bytes) {
+                        // Check in draft or selected option
+                        val activeBytes = draft.coverArtBytes ?: editorState.selectedCoverOption?.bytes
+                        val coverUrl = editorState.selectedCoverOption?.url
+
+                        if (activeBytes != null && activeBytes.isNotEmpty()) {
+                            val bitmap = remember(activeBytes) {
                                 try {
-                                    BitmapFactory.decodeByteArray(selectedCover.bytes, 0, selectedCover.bytes.size)
+                                    BitmapFactory.decodeByteArray(activeBytes, 0, activeBytes.size)
                                 } catch (e: Exception) {
                                     null
                                 }
@@ -240,31 +246,13 @@ fun SongEditorScreen(
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
-                        } else if (!selectedCover?.url.isNullOrBlank()) {
+                        } else if (!coverUrl.isNullOrBlank()) {
                             AsyncImage(
-                                model = selectedCover.url,
+                                model = coverUrl,
                                 contentDescription = "Carátula",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
                             )
-                        } else if (draft.hasCover && draft.coverArtBytes != null) {
-                            val bitmap = remember(draft.coverArtBytes) {
-                                try {
-                                    BitmapFactory.decodeByteArray(draft.coverArtBytes, 0, draft.coverArtBytes.size)
-                                } catch (e: Exception) {
-                                    null
-                                }
-                            }
-                            if (bitmap != null) {
-                                Image(
-                                    bitmap = bitmap.asImageBitmap(),
-                                    contentDescription = "Carátula",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                Icon(Icons.Default.Album, contentDescription = null, tint = StudioTextMuted, modifier = Modifier.size(64.dp))
-                            }
                         } else {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(Icons.Default.Album, contentDescription = null, tint = StudioTextMuted, modifier = Modifier.size(64.dp))
@@ -280,11 +268,11 @@ fun SongEditorScreen(
                                 .padding(bottom = 10.dp)
                                 .clickable { viewModel.openCoverPicker() },
                             shape = CircleShape,
-                            color = Color.Black.copy(alpha = 0.8f),
+                            color = Color.Black.copy(alpha = 0.85f),
                             border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(EmeraldAccent))
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
@@ -296,9 +284,8 @@ fun SongEditorScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Cover Art Resolution / Source Tag
                     val coverLabel = editorState.selectedCoverOption?.label
-                        ?: if (draft.hasCover) "Carátula incrustada en archivo" else "Sin imagen asignada"
+                        ?: if (draft.hasCover) "Carátula asignada (${draft.coverArtBytes?.size ?: 0} B)" else "Sin imagen asignada"
                     Text(
                         text = coverLabel,
                         style = MaterialTheme.typography.labelSmall.copy(color = StudioTextSecondary),
@@ -421,14 +408,14 @@ fun SongEditorScreen(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Buscar en Bases de Datos Libres",
+                            text = "Buscar en MusicBrainz • iTunes • Deezer",
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = StudioTextPrimary
                             )
                         )
                         Text(
-                            text = "MusicBrainz • Cover Art Archive • iTunes • Deezer",
+                            text = "Aplica todos los metadatos y carátula con 1 toque",
                             style = MaterialTheme.typography.bodySmall.copy(color = EmeraldAccent)
                         )
                     }
@@ -439,6 +426,135 @@ fun SongEditorScreen(
                         tint = StudioTextSecondary,
                         modifier = Modifier.size(20.dp)
                     )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // ==================== LYRICS SECTION (NEW) ====================
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("lyrics_section_card"),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = StudioCardSurface),
+                border = CardDefaults.outlinedCardBorder().copy(
+                    brush = androidx.compose.ui.graphics.SolidColor(if (draft.hasLyrics) CyanAccent.copy(alpha = 0.5f) else StudioBorder)
+                )
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Description, contentDescription = null, tint = CyanAccent, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Letra de la Canción",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = StudioTextPrimary
+                                )
+                            )
+                        }
+
+                        Button(
+                            onClick = { viewModel.searchLyricsForCurrentTrack() },
+                            enabled = !editorState.isSearchingLyrics,
+                            colors = ButtonDefaults.buttonColors(containerColor = CyanAccent),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier.testTag("btn_search_lyrics")
+                        ) {
+                            if (editorState.isSearchingLyrics) {
+                                CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Buscando...", color = Color.Black, fontSize = 11.sp)
+                            } else {
+                                Icon(Icons.Default.Search, contentDescription = null, tint = Color.Black, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Buscar en LRCLIB", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Lyrics Text Field
+                    OutlinedTextField(
+                        value = draft.lyrics,
+                        onValueChange = { viewModel.updateDraftField(lyrics = it) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 120.dp, max = 220.dp)
+                            .testTag("input_lyrics"),
+                        placeholder = { Text("Escribe o pega aquí la letra, o usa el botón 'Buscar en LRCLIB'...") },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CyanAccent,
+                            unfocusedBorderColor = StudioBorder,
+                            focusedContainerColor = StudioCardSurfaceVariant,
+                            unfocusedContainerColor = StudioCardSurfaceVariant,
+                            focusedTextColor = StudioTextPrimary,
+                            unfocusedTextColor = StudioTextPrimary
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Lyrics Save Toggles
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Guardar archivo .lrc en carpeta",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = StudioTextPrimary
+                                )
+                            )
+                            Text(
+                                text = "Crea archivo con la letra sincronizada junto al audio",
+                                style = MaterialTheme.typography.labelSmall.copy(color = StudioTextMuted)
+                            )
+                        }
+                        Switch(
+                            checked = editorState.saveLrcFile,
+                            onCheckedChange = { viewModel.setSaveLrcFile(it) },
+                            colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = CyanAccent)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Incrustar letra en la canción",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = StudioTextPrimary
+                                )
+                            )
+                            Text(
+                                text = "Guarda la letra dentro de la etiqueta ${if (draft.format == AudioFormat.MP3) "USLT (ID3v2)" else "©lyr (MP4)"}",
+                                style = MaterialTheme.typography.labelSmall.copy(color = StudioTextMuted)
+                            )
+                        }
+                        Switch(
+                            checked = editorState.embedLyrics,
+                            onCheckedChange = { viewModel.setEmbedLyrics(it) },
+                            colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = EmeraldAccent)
+                        )
+                    }
                 }
             }
 

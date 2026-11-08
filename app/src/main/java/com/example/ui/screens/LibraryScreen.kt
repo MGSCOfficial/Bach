@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
+import android.Manifest
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -14,14 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,6 +26,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -51,13 +47,31 @@ fun LibraryScreen(
     val libraryState by viewModel.libraryState.collectAsStateWithLifecycle()
     val playerState by viewModel.audioPlayer.playerState.collectAsStateWithLifecycle()
 
-    // SAF file picker for selecting audio files (.mp3, .m4a)
-    val openFilesLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenMultipleDocuments()
-    ) { uris: List<Uri> ->
-        if (uris.isNotEmpty()) {
-            viewModel.addFilesFromUris(uris)
+    // SAF directory picker (ACTION_OPEN_DOCUMENT_TREE)
+    val folderPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { treeUri: Uri? ->
+        if (treeUri != null) {
+            viewModel.addMusicFolder(treeUri)
         }
+    }
+
+    // Permission launcher for media audio reading
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.rescanSavedFolders()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        permissionLauncher.launch(permission)
     }
 
     val activePlayingTrack = remember(playerState.activeTrackId, libraryState.tracks) {
@@ -75,8 +89,8 @@ fun LibraryScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
-                                .size(34.dp)
-                                .clip(RoundedCornerShape(8.dp))
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(10.dp))
                                 .background(
                                     Brush.linearGradient(
                                         listOf(EmeraldAccent, VioletAccent)
@@ -88,74 +102,64 @@ fun LibraryScreen(
                                 imageVector = Icons.Default.GraphicEq,
                                 contentDescription = null,
                                 tint = Color.Black,
-                                modifier = Modifier.size(22.dp)
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "SonicTag",
+                                text = "Sound ID",
                                 style = MaterialTheme.typography.titleLarge.copy(
                                     fontWeight = FontWeight.ExtraBold,
                                     color = StudioTextPrimary
                                 )
                             )
                             Text(
-                                text = "Editor de Metadatos MP3 y M4A",
+                                text = "Gestor de Metadatos, Portadas y Letras",
                                 style = MaterialTheme.typography.labelSmall.copy(color = StudioTextSecondary)
                             )
                         }
                     }
                 },
                 actions = {
-                    // Load / Reload demo sample tracks
+                    // Rescan button
                     IconButton(
-                        onClick = { viewModel.loadSampleTracks() },
-                        modifier = Modifier.testTag("reload_samples_button")
+                        onClick = { viewModel.rescanSavedFolders() },
+                        modifier = Modifier.testTag("btn_rescan_folders")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
-                            contentDescription = "Recargar canciones de muestra",
+                            contentDescription = "Re-escanear carpetas",
                             tint = StudioTextSecondary
                         )
                     }
 
-                    // Open SAF File Picker
+                    // Add folder button
                     IconButton(
-                        onClick = {
-                            openFilesLauncher.launch(
-                                arrayOf("audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/*")
-                            )
-                        },
-                        modifier = Modifier.testTag("open_files_button")
+                        onClick = { folderPickerLauncher.launch(null) },
+                        modifier = Modifier.testTag("btn_add_folder_appbar")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.FolderOpen,
-                            contentDescription = "Abrir archivos del dispositivo",
+                            imageVector = Icons.Default.CreateNewFolder,
+                            contentDescription = "Seleccionar carpeta de música",
                             tint = EmeraldAccent
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = StudioDarkBg
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = StudioDarkBg)
             )
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = {
-                    openFilesLauncher.launch(
-                        arrayOf("audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/*")
-                    )
-                },
+                onClick = { folderPickerLauncher.launch(null) },
                 containerColor = EmeraldAccent,
                 contentColor = Color.Black,
                 shape = CircleShape,
                 modifier = Modifier
                     .padding(bottom = if (activePlayingTrack != null) 64.dp else 16.dp)
-                    .testTag("fab_add_tracks")
+                    .testTag("fab_add_folder")
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Añadir archivos de música")
+                Icon(Icons.Default.CreateNewFolder, contentDescription = "Añadir carpeta de música")
             }
         },
         bottomBar = {
@@ -176,14 +180,78 @@ fun LibraryScreen(
                 .padding(paddingValues)
                 .padding(horizontal = 16.dp)
         ) {
-            // Local search input
+            // Folders Horizontal List (if any folders added)
+            if (libraryState.folders.isNotEmpty()) {
+                Text(
+                    text = "Carpetas de Música Seleccionadas",
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        color = StudioTextSecondary,
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    libraryState.folders.forEach { folder ->
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = StudioCardSurface,
+                            border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(StudioBorder))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Folder, contentDescription = null, tint = EmeraldAccent, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "${folder.displayName} (${folder.trackCount})",
+                                    color = StudioTextPrimary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Quitar carpeta",
+                                    tint = StudioTextMuted,
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .clickable { viewModel.removeMusicFolder(folder.uriString) }
+                                )
+                            }
+                        }
+                    }
+
+                    // Quick "+ Carpeta" chip
+                    AssistChip(
+                        onClick = { folderPickerLauncher.launch(null) },
+                        label = { Text("+ Carpeta", color = EmeraldAccent, fontSize = 12.sp) },
+                        leadingIcon = {
+                            Icon(Icons.Default.Add, contentDescription = null, tint = EmeraldAccent, modifier = Modifier.size(14.dp))
+                        },
+                        colors = AssistChipDefaults.assistChipColors(containerColor = StudioCardSurfaceVariant)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+
+            // Search text field
             OutlinedTextField(
                 value = libraryState.searchQuery,
                 onValueChange = { viewModel.onSearchQueryChanged(it) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("library_search_input"),
-                placeholder = { Text("Buscar en la biblioteca...") },
+                placeholder = { Text("Buscar por título, artista o álbum...") },
                 leadingIcon = {
                     Icon(Icons.Default.Search, contentDescription = null, tint = StudioTextSecondary)
                 },
@@ -206,9 +274,9 @@ fun LibraryScreen(
                 singleLine = true
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Filter Chips Horizontal Scroll
+            // Filter Chips Row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -236,7 +304,7 @@ fun LibraryScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Stats info line
             Row(
@@ -245,10 +313,8 @@ fun LibraryScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "${libraryState.filteredTracks.size} canciones encontradas",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        color = StudioTextMuted
-                    )
+                    text = "${libraryState.filteredTracks.size} canciones",
+                    style = MaterialTheme.typography.labelSmall.copy(color = StudioTextMuted)
                 )
 
                 if (libraryState.statusMessage != null) {
@@ -262,7 +328,7 @@ fun LibraryScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Tracks List or Empty State
+            // Content Area
             if (libraryState.isLoading) {
                 Box(
                     modifier = Modifier
@@ -270,50 +336,98 @@ fun LibraryScreen(
                         .weight(1f),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = EmeraldAccent)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(color = EmeraldAccent)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(text = "Escaneando música en carpetas...", color = StudioTextSecondary, fontSize = 13.sp)
+                    }
                 }
-            } else if (libraryState.filteredTracks.isEmpty()) {
+            } else if (libraryState.folders.isEmpty()) {
+                // Empty state: No folder chosen yet
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(24.dp)
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth(0.92f)
+                            .testTag("empty_state_no_folders_card"),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = StudioCardSurface),
+                        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(StudioBorder))
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.LibraryMusic,
-                            contentDescription = null,
-                            tint = StudioTextMuted,
-                            modifier = Modifier.size(56.dp)
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "No hay canciones en la lista",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                color = StudioTextPrimary
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Carga las canciones de muestra o abre archivos MP3/M4A de tu dispositivo.",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = StudioTextSecondary
-                            ),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(
-                            onClick = { viewModel.loadSampleTracks() },
-                            colors = ButtonDefaults.buttonColors(containerColor = StudioCardSurfaceVariant)
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Icon(Icons.Default.Refresh, contentDescription = null, tint = EmeraldAccent)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Cargar Canciones Demo", color = StudioTextPrimary)
+                            Box(
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .clip(CircleShape)
+                                    .background(EmeraldDark.copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.FolderSpecial,
+                                    contentDescription = null,
+                                    tint = EmeraldAccent,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Text(
+                                text = "Selecciona una Carpeta con Música",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = StudioTextPrimary
+                                ),
+                                textAlign = TextAlign.Center
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Text(
+                                text = "Elige la carpeta de tu dispositivo donde guardas tus canciones MP3 o M4A. Sound ID detectará todos los archivos automáticamente y guardará las portadas y etiquetas directamente en tus archivos.",
+                                style = MaterialTheme.typography.bodySmall.copy(color = StudioTextSecondary),
+                                textAlign = TextAlign.Center
+                            )
+
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            Button(
+                                onClick = { folderPickerLauncher.launch(null) },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = EmeraldAccent),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("btn_select_music_folder_cta")
+                            ) {
+                                Icon(Icons.Default.FolderOpen, contentDescription = null, tint = Color.Black)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Seleccionar Carpeta", color = Color.Black, fontWeight = FontWeight.Bold)
+                            }
                         }
+                    }
+                }
+            } else if (libraryState.filteredTracks.isEmpty()) {
+                // Empty state: Folders selected, but no songs matched filter
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.MusicOff, contentDescription = null, tint = StudioTextMuted, modifier = Modifier.size(48.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "No se encontraron canciones con este filtro",
+                            style = MaterialTheme.typography.bodyMedium.copy(color = StudioTextSecondary)
+                        )
                     }
                 }
             } else {

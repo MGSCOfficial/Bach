@@ -322,16 +322,18 @@ fun CandidateItemCard(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            FilledTonalButton(
+            Button(
                 onClick = onSelect,
                 shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = StudioCardSurfaceVariant,
-                    contentColor = EmeraldAccent
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = EmeraldAccent,
+                    contentColor = Color.Black
                 ),
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
             ) {
-                Text("Elegir", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Aplicar", fontWeight = FontWeight.Bold, fontSize = 12.sp)
             }
         }
     }

@@ -1,19 +1,19 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
-import android.content.Context
 import android.net.Uri
-import android.provider.OpenableColumns
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.AudioFormat
 import com.example.data.model.AudioTrack
 import com.example.data.model.CoverArtOption
+import com.example.data.model.MusicFolder
 import com.example.data.model.OnlineCandidate
 import com.example.data.model.TagDiff
+import com.example.data.remote.LyricsRepository
 import com.example.data.remote.OnlineMetadataRepository
-import com.example.data.tagger.AudioTagReader
+import com.example.data.storage.FolderManager
 import com.example.data.tagger.AudioTagWriter
 import com.example.player.AudioPreviewPlayer
 import kotlinx.coroutines.Dispatchers
@@ -23,18 +23,18 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.FileOutputStream
 
 enum class LibraryFilter(val label: String) {
     ALL("Todas"),
     MISSING_COVER("Sin Carátula"),
+    MISSING_LYRICS("Sin Letra"),
     MISSING_TAGS("Incompletas"),
     MP3_ONLY("MP3"),
     M4A_ONLY("M4A")
 }
 
 data class LibraryUiState(
+    val folders: List<MusicFolder> = emptyList(),
     val tracks: List<AudioTrack> = emptyList(),
     val filteredTracks: List<AudioTrack> = emptyList(),
     val searchQuery: String = "",
@@ -52,6 +52,9 @@ data class EditorUiState(
     val coverArtOptions: List<CoverArtOption> = emptyList(),
     val selectedCoverOption: CoverArtOption? = null,
     val isLoadingCovers: Boolean = false,
+    val isSearchingLyrics: Boolean = false,
+    val saveLrcFile: Boolean = true,
+    val embedLyrics: Boolean = true,
     val showCandidateSheet: Boolean = false,
     val showCoverPickerSheet: Boolean = false,
     val showDiffDialog: Boolean = false,
@@ -62,7 +65,9 @@ data class EditorUiState(
 
 class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repository = OnlineMetadataRepository()
+    private val onlineRepo = OnlineMetadataRepository()
+    private val lyricsRepo = LyricsRepository()
+    val folderManager = FolderManager(application)
     val audioPlayer = AudioPreviewPlayer(application)
 
     private val _libraryState = MutableStateFlow(LibraryUiState())
@@ -72,89 +77,58 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     val editorState: StateFlow<EditorUiState> = _editorState.asStateFlow()
 
     init {
-        loadSampleTracks()
+        rescanSavedFolders()
     }
 
-    // ==================== LIBRARY MANAGEMENT ====================
+    // ==================== FOLDER & LIBRARY MANAGEMENT ====================
 
-    fun loadSampleTracks() {
-        viewModelScope.launch(Dispatchers.IO) {
-            _libraryState.update { it.copy(isLoading = true, statusMessage = "Cargando biblioteca...") }
-            try {
-                val context = getApplication<Application>()
-                val samplesDir = File(context.filesDir, "sample_tracks").apply { mkdirs() }
-                val assetManager = context.assets
-                val sampleNames = listOf(
-                    "queen_bohemian.mp3",
-                    "michael_jackson_billie.m4a",
-                    "eagles_hotel_california.mp3",
-                    "daft_punk_get_lucky.m4a"
+    fun rescanSavedFolders() {
+        viewModelScope.launch {
+            _libraryState.update { it.copy(isLoading = true, statusMessage = "Escaneando carpetas de música...") }
+            val (folders, tracks) = folderManager.scanFolders()
+            _libraryState.update { state ->
+                state.copy(
+                    folders = folders,
+                    tracks = tracks,
+                    filteredTracks = applyFilterAndSearch(tracks, state.activeFilter, state.searchQuery),
+                    isLoading = false,
+                    statusMessage = if (folders.isEmpty()) {
+                        "Selecciona una carpeta para cargar tu música."
+                    } else {
+                        "Encontradas ${tracks.size} canciones en ${folders.size} carpetas."
+                    }
                 )
-
-                val loadedTracks = mutableListOf<AudioTrack>()
-                for (name in sampleNames) {
-                    val destFile = File(samplesDir, name)
-                    if (!destFile.exists() || destFile.length() == 0L) {
-                        try {
-                            assetManager.open("sample_tracks/$name").use { input ->
-                                FileOutputStream(destFile).use { output -> input.copyTo(output) }
-                            }
-                        } catch (e: Exception) {
-                            Log.e("MusicViewModel", "Could not copy asset sample $name", e)
-                        }
-                    }
-
-                    if (destFile.exists() && destFile.length() > 0L) {
-                        val track = AudioTagReader.readFromFile(destFile)
-                        if (track != null) {
-                            loadedTracks.add(track)
-                        }
-                    }
-                }
-
-                _libraryState.update { state ->
-                    val combined = (loadedTracks + state.tracks).distinctBy { it.fileName }
-                    state.copy(
-                        tracks = combined,
-                        filteredTracks = applyFilterAndSearch(combined, state.activeFilter, state.searchQuery),
-                        isLoading = false,
-                        statusMessage = "Se cargaron ${loadedTracks.size} pistas de prueba."
-                    )
-                }
-            } catch (e: Exception) {
-                Log.e("MusicViewModel", "Error loading sample tracks", e)
-                _libraryState.update { it.copy(isLoading = false, statusMessage = "Error al cargar muestras") }
             }
         }
     }
 
-    fun addFilesFromUris(uris: List<Uri>) {
-        if (uris.isEmpty()) return
-        viewModelScope.launch(Dispatchers.IO) {
-            _libraryState.update { it.copy(isLoading = true, statusMessage = "Importando archivos...") }
-            val context = getApplication<Application>()
-            val imported = mutableListOf<AudioTrack>()
-
-            for (uri in uris) {
-                try {
-                    val (fileName, size) = queryFileInfo(context, uri)
-                    val format = AudioFormat.fromFileName(fileName)
-                    val track = AudioTagReader.readTrack(context, uri, fileName, size)
-                    if (track != null) {
-                        imported.add(track)
-                    }
-                } catch (e: Exception) {
-                    Log.e("MusicViewModel", "Error importing uri $uri", e)
-                }
-            }
-
+    fun addMusicFolder(treeUri: Uri) {
+        viewModelScope.launch {
+            _libraryState.update { it.copy(isLoading = true, statusMessage = "Vinculando carpeta...") }
+            folderManager.addFolderUri(treeUri)
+            val (folders, tracks) = folderManager.scanFolders()
             _libraryState.update { state ->
-                val newTracks = (imported + state.tracks).distinctBy { it.fileUri }
                 state.copy(
-                    tracks = newTracks,
-                    filteredTracks = applyFilterAndSearch(newTracks, state.activeFilter, state.searchQuery),
+                    folders = folders,
+                    tracks = tracks,
+                    filteredTracks = applyFilterAndSearch(tracks, state.activeFilter, state.searchQuery),
                     isLoading = false,
-                    statusMessage = "Importadas ${imported.size} canciones."
+                    statusMessage = "Carpeta añadida con ${tracks.size} canciones encontradas."
+                )
+            }
+        }
+    }
+
+    fun removeMusicFolder(uriString: String) {
+        viewModelScope.launch {
+            folderManager.removeFolder(uriString)
+            val (folders, tracks) = folderManager.scanFolders()
+            _libraryState.update { state ->
+                state.copy(
+                    folders = folders,
+                    tracks = tracks,
+                    filteredTracks = applyFilterAndSearch(tracks, state.activeFilter, state.searchQuery),
+                    statusMessage = "Carpeta desvinculada."
                 )
             }
         }
@@ -186,6 +160,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val filtered = when (filter) {
             LibraryFilter.ALL -> tracks
             LibraryFilter.MISSING_COVER -> tracks.filter { !it.hasCover }
+            LibraryFilter.MISSING_LYRICS -> tracks.filter { !it.hasLyrics }
             LibraryFilter.MISSING_TAGS -> tracks.filter { !it.isComplete }
             LibraryFilter.MP3_ONLY -> tracks.filter { it.format == AudioFormat.MP3 }
             LibraryFilter.M4A_ONLY -> tracks.filter { it.format == AudioFormat.M4A }
@@ -204,17 +179,22 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     // ==================== EDITOR WORKFLOW ====================
 
     fun openTrackEditor(track: AudioTrack) {
+        val initialCover = if (track.hasCover && track.coverArtBytes != null) {
+            CoverArtOption(
+                source = "Actual del archivo",
+                bytes = track.coverArtBytes,
+                label = "Carátula incrustada",
+                isSelected = true
+            )
+        } else null
+
         _editorState.value = EditorUiState(
             originalTrack = track,
             draftTrack = track.copy(),
-            selectedCoverOption = if (track.hasCover && track.coverArtBytes != null) {
-                CoverArtOption(
-                    source = "Actual del archivo",
-                    bytes = track.coverArtBytes,
-                    label = "Carátula incrustada",
-                    isSelected = true
-                )
-            } else null
+            selectedCoverOption = initialCover,
+            coverArtOptions = if (initialCover != null) listOf(initialCover) else emptyList(),
+            saveLrcFile = true,
+            embedLyrics = true
         )
     }
 
@@ -232,10 +212,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         genre: String? = null,
         trackNumber: String? = null,
         discNumber: String? = null,
-        comment: String? = null
+        comment: String? = null,
+        lyrics: String? = null
     ) {
         _editorState.update { state ->
             val draft = state.draftTrack ?: return@update state
+            val newLyrics = lyrics ?: draft.lyrics
             state.copy(
                 draftTrack = draft.copy(
                     title = title ?: draft.title,
@@ -246,10 +228,20 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     genre = genre ?: draft.genre,
                     trackNumber = trackNumber ?: draft.trackNumber,
                     discNumber = discNumber ?: draft.discNumber,
-                    comment = comment ?: draft.comment
+                    comment = comment ?: draft.comment,
+                    lyrics = newLyrics,
+                    hasLyrics = newLyrics.isNotBlank()
                 )
             )
         }
+    }
+
+    fun setSaveLrcFile(enabled: Boolean) {
+        _editorState.update { it.copy(saveLrcFile = enabled) }
+    }
+
+    fun setEmbedLyrics(enabled: Boolean) {
+        _editorState.update { it.copy(embedLyrics = enabled) }
     }
 
     fun searchOnlineForCurrentTrack(customQuery: String? = null) {
@@ -263,7 +255,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             _editorState.update { it.copy(isSearchingOnline = true, showCandidateSheet = true) }
-            val candidates = repository.searchAllSources(query)
+            val candidates = onlineRepo.searchAllSources(query)
             _editorState.update {
                 it.copy(
                     isSearchingOnline = false,
@@ -275,6 +267,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectCandidate(candidate: OnlineCandidate) {
         viewModelScope.launch {
+            // 1. Immediately apply ALL text metadata to draft
             _editorState.update { state ->
                 val draft = state.draftTrack ?: return@update state
                 state.copy(
@@ -284,25 +277,82 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                         title = candidate.title.ifBlank { draft.title },
                         artist = candidate.artist.ifBlank { draft.artist },
                         album = candidate.album.ifBlank { draft.album },
-                        albumArtist = candidate.albumArtist.ifBlank { draft.albumArtist.ifBlank { candidate.artist } },
+                        albumArtist = candidate.albumArtist.ifBlank { candidate.artist },
                         year = candidate.year.ifBlank { draft.year },
                         genre = candidate.genre.ifBlank { draft.genre },
                         trackNumber = candidate.trackNumber.ifBlank { draft.trackNumber },
                         discNumber = candidate.discNumber.ifBlank { draft.discNumber }
                     ),
-                    isLoadingCovers = true
+                    isLoadingCovers = true,
+                    saveNotification = "Metadatos de '${candidate.title}' aplicados al borrador."
                 )
             }
 
-            // Fetch cover art options from MusicBrainz Cover Art Archive, iTunes, Deezer
-            val covers = repository.fetchCoverArtOptions(candidate)
+            // 2. Fetch cover art options from Cover Art Archive, iTunes, Deezer
+            val covers = onlineRepo.fetchCoverArtOptions(candidate)
+
+            // If candidate has a cover URL, download bytes immediately so it's loaded in memory
+            var bestCover = covers.firstOrNull { it.isSelected } ?: covers.firstOrNull()
+            if (bestCover != null && bestCover.bytes == null && !bestCover.url.isNullOrBlank()) {
+                val downloaded = onlineRepo.downloadImageBytes(bestCover.url)
+                if (downloaded != null) {
+                    bestCover = bestCover.copy(bytes = downloaded)
+                }
+            }
+
             _editorState.update { state ->
-                val bestCover = covers.firstOrNull { it.isSelected } ?: covers.firstOrNull()
+                val updatedDraft = if (bestCover?.bytes != null) {
+                    state.draftTrack?.copy(
+                        coverArtBytes = bestCover.bytes,
+                        hasCover = true
+                    )
+                } else {
+                    state.draftTrack
+                }
+
                 state.copy(
                     coverArtOptions = covers,
                     selectedCoverOption = bestCover ?: state.selectedCoverOption,
+                    draftTrack = updatedDraft,
                     isLoadingCovers = false
                 )
+            }
+
+            // 3. Search and auto-populate lyrics from LRCLIB
+            searchLyricsForCurrentTrack()
+        }
+    }
+
+    fun searchLyricsForCurrentTrack() {
+        val draft = _editorState.value.draftTrack ?: return
+        if (draft.title.isBlank() && draft.artist.isBlank()) return
+
+        viewModelScope.launch {
+            _editorState.update { it.copy(isSearchingLyrics = true) }
+            val result = lyricsRepo.fetchLyrics(
+                trackName = draft.title,
+                artistName = draft.artist,
+                albumName = draft.album,
+                durationMs = draft.durationMs
+            )
+
+            _editorState.update { state ->
+                val curDraft = state.draftTrack ?: return@update state
+                if (result != null && result.bestLyrics.isNotBlank()) {
+                    state.copy(
+                        isSearchingLyrics = false,
+                        draftTrack = curDraft.copy(
+                            lyrics = result.bestLyrics,
+                            hasLyrics = true
+                        ),
+                        saveNotification = "Letra encontrada y asignada (${result.source})."
+                    )
+                } else {
+                    state.copy(
+                        isSearchingLyrics = false,
+                        saveNotification = "No se encontró letra automática para esta pista."
+                    )
+                }
             }
         }
     }
@@ -312,14 +362,33 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun selectCoverOption(option: CoverArtOption) {
-        _editorState.update { state ->
-            state.copy(
-                selectedCoverOption = option,
-                showCoverPickerSheet = false,
-                coverArtOptions = state.coverArtOptions.map {
-                    it.copy(isSelected = it.id == option.id)
+        viewModelScope.launch {
+            var finalOption = option
+            if (option.bytes == null && !option.url.isNullOrBlank()) {
+                val downloaded = onlineRepo.downloadImageBytes(option.url)
+                if (downloaded != null) {
+                    finalOption = option.copy(bytes = downloaded)
                 }
-            )
+            }
+
+            _editorState.update { state ->
+                val draft = state.draftTrack
+                val updatedDraft = if (finalOption.bytes != null) {
+                    draft?.copy(
+                        coverArtBytes = finalOption.bytes,
+                        hasCover = true
+                    )
+                } else draft
+
+                state.copy(
+                    selectedCoverOption = finalOption,
+                    draftTrack = updatedDraft,
+                    showCoverPickerSheet = false,
+                    coverArtOptions = state.coverArtOptions.map {
+                        it.copy(isSelected = it.id == option.id)
+                    }
+                )
+            }
         }
     }
 
@@ -331,7 +400,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             isSelected = true
         )
         _editorState.update { state ->
+            val draft = state.draftTrack?.copy(
+                coverArtBytes = bytes,
+                hasCover = true
+            )
             state.copy(
+                draftTrack = draft,
                 selectedCoverOption = customOption,
                 showCoverPickerSheet = false,
                 coverArtOptions = listOf(customOption) + state.coverArtOptions
@@ -354,6 +428,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val draft = _editorState.value.draftTrack ?: return
         val selectedCover = _editorState.value.selectedCoverOption
 
+        val coverChanged = when {
+            selectedCover?.bytes != null && selectedCover.bytes != original.coverArtBytes -> true
+            selectedCover?.url != null -> true
+            else -> false
+        }
+
         val diffs = listOf(
             TagDiff("Título", original.title, draft.title),
             TagDiff("Artista", original.artist, draft.artist),
@@ -367,7 +447,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 "Carátula",
                 if (original.hasCover) "Incrustada (${original.coverArtBytes?.size ?: 0} B)" else "Sin carátula",
                 selectedCover?.label ?: if (draft.hasCover) "Mantener actual" else "Sin carátula",
-                isChanged = selectedCover != null && (selectedCover.bytes != original.coverArtBytes || selectedCover.url != null)
+                isChanged = coverChanged
+            ),
+            TagDiff(
+                "Letra de Canción",
+                if (original.hasLyrics) "${original.lyrics.lines().size} versos" else "Sin letra",
+                if (draft.hasLyrics) "${draft.lyrics.lines().size} versos" else "Sin letra",
+                isChanged = original.lyrics.trim() != draft.lyrics.trim()
             )
         )
 
@@ -382,31 +468,42 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val original = _editorState.value.originalTrack ?: return
         val draft = _editorState.value.draftTrack ?: return
         val coverOption = _editorState.value.selectedCoverOption
+        val saveLrc = _editorState.value.saveLrcFile
+        val embedLyrics = _editorState.value.embedLyrics
 
         viewModelScope.launch(Dispatchers.IO) {
             _editorState.update { it.copy(isSaving = true) }
 
-            // Download image bytes if URL option was chosen
+            // Ensure cover bytes are ready
             val coverBytes: ByteArray? = when {
                 coverOption?.bytes != null -> coverOption.bytes
-                coverOption?.url != null -> repository.downloadImageBytes(coverOption.url)
+                coverOption?.url != null -> onlineRepo.downloadImageBytes(coverOption.url)
+                draft.coverArtBytes != null -> draft.coverArtBytes
                 else -> original.coverArtBytes
             }
 
-            val savedFile = AudioTagWriter.writeTags(
+            // 1. Write tags directly to original file via ContentResolver SAF stream
+            val success = AudioTagWriter.writeTagsDirectly(
                 context = getApplication(),
-                originalTrack = original,
+                track = original,
                 updatedTrack = draft,
-                coverBytes = coverBytes
+                coverBytes = coverBytes,
+                lyricsText = if (embedLyrics) draft.lyrics else null
             )
 
-            if (savedFile != null) {
+            // 2. Save .lrc file in folder if requested
+            if (saveLrc && draft.lyrics.isNotBlank()) {
+                val lrcSaved = folderManager.saveLrcFile(original, draft.lyrics)
+                if (lrcSaved) {
+                    Log.i("MusicViewModel", "Saved .lrc companion file for ${original.fileName}")
+                }
+            }
+
+            if (success) {
                 val updatedTrack = draft.copy(
-                    filePath = savedFile.absolutePath,
-                    fileUri = Uri.fromFile(savedFile).toString(),
                     hasCover = coverBytes != null && coverBytes.isNotEmpty(),
                     coverArtBytes = coverBytes,
-                    sizeBytes = savedFile.length(),
+                    hasLyrics = draft.lyrics.isNotBlank(),
                     dateModified = System.currentTimeMillis()
                 )
 
@@ -417,7 +514,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     state.copy(
                         tracks = updatedList,
                         filteredTracks = applyFilterAndSearch(updatedList, state.activeFilter, state.searchQuery),
-                        statusMessage = "¡Etiquetas guardadas con éxito en ${savedFile.name}!"
+                        statusMessage = "¡Etiquetas y carátula guardadas en ${original.fileName}!"
                     )
                 }
 
@@ -427,7 +524,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                         showDiffDialog = false,
                         originalTrack = updatedTrack,
                         draftTrack = updatedTrack.copy(),
-                        saveNotification = "¡Metadatos y carátula aplicados correctamente!"
+                        saveNotification = "¡Archivo actualizado con éxito en el almacenamiento!"
                     )
                 }
             } else {
@@ -435,7 +532,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     it.copy(
                         isSaving = false,
                         showDiffDialog = false,
-                        saveNotification = "Error al escribir los metadatos en el archivo."
+                        saveNotification = "Error: no se pudo escribir directamente en el archivo."
                     )
                 }
             }
@@ -444,25 +541,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun dismissSaveNotification() {
         _editorState.update { it.copy(saveNotification = null) }
-    }
-
-    private fun queryFileInfo(context: Context, uri: Uri): Pair<String, Long> {
-        var name = "audio_track"
-        var size = 0L
-        if (uri.scheme == "file") {
-            val f = File(uri.path ?: "")
-            return Pair(f.name, f.length())
-        }
-
-        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-            val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
-            if (cursor.moveToFirst()) {
-                if (nameIndex != -1) name = cursor.getString(nameIndex) ?: name
-                if (sizeIndex != -1) size = cursor.getLong(sizeIndex)
-            }
-        }
-        return Pair(name, size)
     }
 
     override fun onCleared() {

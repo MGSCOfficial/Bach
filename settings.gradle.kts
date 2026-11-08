@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "SonicTag"
+rootProject.name = "Sound ID"
 
 include(":app")

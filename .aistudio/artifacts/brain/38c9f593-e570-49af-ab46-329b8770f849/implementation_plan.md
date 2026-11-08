@@ -1,116 +1,106 @@
-# SonicTag - Editor de Metadatos y Portadas Musicales
+# Sound ID - Actualización y Corrección Integral
 
-SonicTag es una aplicación nativa para Android desarrollada con Jetpack Compose y Material Design 3 que permite organizar bibliotecas musicales, buscar y aplicar automáticamente metadatos y carátulas en alta resolución para archivos MP3 y M4A desde bases de datos libres (MusicBrainz, Cover Art Archive, iTunes y Deezer), con previsualización comparativa antes de guardar y reproductor integrado.
+Sound ID (anteriormente SonicTag) se actualiza para solucionar de raíz los problemas de persistencia de archivos reales y selección de metadatos, incorporar escaneo exclusivo de carpetas de música elegidas por el usuario mediante Storage Access Framework (SAF), eliminar pistas demo y añadir la búsqueda, descarga e incrustación de letras de canciones (.lrc y tags internos).
 
-### Decisiones Críticas y Preferencias del Usuario
+### Decisiones Críticas y Preferencias Confirmadas
 
 > [!IMPORTANT]
-> A partir de las aclaraciones confirmadas en la Fase 1, se han fijado las siguientes especificaciones:
-> - **Fuentes en línea integradas**: Todas las gratuitas disponibles sin requerir claves de API: **MusicBrainz API v2**, **Cover Art Archive (Archive.org)**, **iTunes Search API (Apple)** y **Deezer Public API**.
-> - **Carga y prueba de archivos**: Selector de archivos del dispositivo mediante Storage Access Framework (SAF) con soporte para MP3 y M4A, además de un paquete de canciones de prueba precargadas para probar la app de forma inmediata en el emulador.
-> - **Flujo de trabajo principal**: Flujo canción por canción con búsqueda manual y asistida, selector múltiple de opciones de metadatos y carátulas, previsualización detallada "antes y después", y reproductor de audio integrado para verificar la pista.
+> - **Nombre de la Aplicación**: Cambio oficial a **Sound ID** en interfaz, recursos y metadatos de la plataforma.
+> - **Gestión de Música**: Eliminación completa de pistas de prueba y selección individual de canciones. El flujo se basará exclusivamente en seleccionar carpetas completas del dispositivo con permisos persistentes de lectura y escritura.
+> - **Corrección de Persistencia (Carátula y Etiquetas)**: Escritura directa en los archivos de origen a través de `ContentResolver.openOutputStream(uri, "wt")` y descriptores de archivo reales, garantizando que tanto los metadatos como las carátulas se guarden físicamente en el archivo MP3/M4A del usuario.
+> - **Selección de Metadatos Asistida**: Al seleccionar un resultado de MusicBrainz, iTunes o Deezer, se aplicarán inmediatamente todos los campos de metadatos al borrador de edición, manteniendo la posibilidad de editar cada campo manualmente.
+> - **Letras de Canciones**: Doble almacenamiento confirmado por el usuario: incrustadas en las etiquetas del archivo de audio (marco `USLT` en MP3 y átomo `©lyr` en M4A) y guardadas como archivo complementario `.lrc` en la misma carpeta.
 
 ---
 
-## 1. Visión General y Concepto Principal
+## 1. Visión General y Cambios Principales
 
-- **Propósito**: Solucionar el problema común de archivos de música descargados con títulos genéricos, artistas desconocidos o carátulas pixeladas/ausentes, permitiendo restaurar la calidad estética y documental de la colección.
-- **Audiencia**: Amantes de la música, coleccionistas de audio digital y usuarios que desean mantener sus canciones con etiquetas ID3 y metadatos MP4 perfectamente normalizados.
-- **Propuesta de Valor**: Integración simultánea de múltiples motores de búsqueda gratuitos, galería de carátulas en alta resolución con selección interactiva, visor comparativo en tiempo real antes de aplicar cambios irreversibles, y edición tanto en MP3 como en M4A.
-
----
-
-## 2. Experiencia de Usuario y Diseño Visual
-
-### Flujos Principales de Usuario
-
-1. **Explorador y Organizador de Biblioteca**:
-   - Vista principal con pestañas o filtros rápidos: *Todas*, *Sin carátula*, *Metadatos incompletos*, *MP3*, *M4A*.
-   - Barra de búsqueda local por título, artista o álbum.
-   - Opciones para importar canciones del almacenamiento del teléfono o activar las "Pistas de Demostración".
-   - Tarjetas de canción con miniatura de carátula actual, insignia de formato, calidad y estado de etiquetado.
-
-2. **Editor Detallado de Canción y Búsqueda en Línea**:
-   - Al pulsar una canción, se abre la pantalla de edición completa.
-   - Botón destacado "Buscar en Bases de Datos" que consulta MusicBrainz, iTunes y Deezer en paralelo con el título/nombre de archivo.
-   - Pestaña de candidatos con insignias de origen (`MusicBrainz`, `iTunes`, `Deezer`), coincidencia de pista, año, álbum y duración.
-
-3. **Selector Múltiple de Carátulas**:
-   - Visualización en cuadrícula de todas las carátulas encontradas (Cover Art Archive 1200px/500px, iTunes 1000px, Deezer XL, además de opción de elegir imagen desde la galería local o cámara).
-   - Selector táctil para asignar la carátula deseada.
-
-4. **Previsualización Comparativa "Antes vs. Después"**:
-   - Hoja deslizante (Bottom Sheet) o diálogo modal comparativo que muestra en dos columnas el estado actual del archivo contra los nuevos datos propuestos (destacando en color esmeralda los campos modificados).
-   - Confirmación explícita antes de escribir las etiquetas en el archivo físico.
-
-5. **Reproductor de Audio Mini Integrado**:
-   - Barra de reproducción para escuchar la pista directamente en la app y confirmar auditivamente de qué canción se trata.
-
-### Identidad Visual y Estilo
-
-- **Atmósfera**: *Midnight Studio* — Tema oscuro elegante inspirado en interfaces de producción de audio (fondos en gris carbón profundo `#121214`, superficies elevadas `#1E1E24`, acentos en verde neón esmeralda `#10B981` y púrpura sónico `#8B5CF6`).
-- **Tipografía**: Jerarquía limpia y legible con números monoespaciados para duración y metadatos técnicos.
-- **Microinteracciones**: Transiciones animadas (`AnimatedContent`), efecto shimmer durante la búsqueda en red, e indicadores de progreso al escribir los metadatos.
+1. **Renombrado Completo a Sound ID**:
+   - `strings.xml`, `metadata.json`, cabeceras de navegación y pruebas unitarias.
+2. **Escaneo y Detección de Carpetas (SAF Persistente)**:
+   - Selector de directorios mediante `ACTION_OPEN_DOCUMENT_TREE`.
+   - Solicitud y retención de permisos persistentes (`takePersistableUriPermission`) para que la app recuerde las carpetas añadidas entre reinicios.
+   - Exploración recursiva de archivos `.mp3` y `.m4a` dentro de las carpetas seleccionadas.
+   - Eliminación definitiva del cargador de canciones de prueba y de archivos temporales de demo.
+3. **Corrección de Escritura Real en Almacenamiento**:
+   - El error anterior se debía a que se intentaba escribir en rutas de archivo estándar bloqueadas por Scoped Storage de Android o en caché local sin volcar los bytes al archivo de origen.
+   - Se utilizará `ContentResolver.openInputStream` y `ContentResolver.openOutputStream(targetUri, "wt")` sobre los `DocumentFile` reales.
+   - Corrección en la memoria de carátula: al seleccionar una carátula, se descargarán los bytes y se actualizarán inmediatamente en la memoria del modelo para que la previsualización y el guardado conserven la imagen elegida.
+4. **Solución a la Selección de Metadatos Online**:
+   - Corrección en la vinculación entre los candidatos devueltos por MusicBrainz / iTunes / Deezer y el formulario de edición: al presionar "Elegir", se actualizarán en un solo paso todos los campos de texto y se buscarán las portadas correspondientes.
+5. **Módulo de Letras de Canciones (LRCLIB API)**:
+   - Integración con la API libre y gratuita de letras **LRCLIB** (`https://lrclib.net/api/get`).
+   - Obtención de letra sincronizada y letra en texto plano.
+   - Escritura de letra en formato `.lrc` en el directorio de la canción.
+   - Incrustación de la letra dentro del archivo de audio:
+     - MP3: Marco ID3v2.3 `USLT` (Unsynchronized lyrics/text transcription).
+     - M4A: Átomo MP4 `©lyr`.
 
 ---
 
-## 3. Decisiones de Producto y Arquitectura Técnica
+## 2. Experiencia de Usuario y Flujo de Interfaz
 
-### Elección de Tecnologías
-- **Motor de Red**: Retrofit + Moshi + OkHttp para llamadas paralelas y concurrentes a MusicBrainz, Cover Art Archive, iTunes y Deezer.
-- **Carga de Imágenes**: Coil Compose con soporte para caché en disco y transformaciones de esquinas redondeadas.
-- **Lectura y Escritura de Audio**:
-  - Lectura inmediata mediante `android.media.MediaMetadataRetriever` y extractor binario de tags.
-  - Motor de escritura nativo en Kotlin para marcos ID3v2 (TIT2, TPE1, TALB, TYER, TCON, TRCK, APIC) en archivos MP3 y átomos MP4 (`©nam`, `©ART`, `©alb`, `©day`, `©gen`, `covr`) en archivos M4A.
-- **Almacenamiento Local de Estado**: ViewModel con StateFlow para gestión reactiva de la biblioteca en memoria, permitiendo guardar los archivos modificados en el almacenamiento del usuario o en el directorio accesible de música.
+### Pantalla Principal (Biblioteca de Carpetas)
+- Barra superior con identidad **Sound ID**.
+- Panel de carpetas configuradas: lista de directorios vinculados con botón "Añadir Carpeta de Música" y "Re-escanear".
+- Pestañas de filtrado: *Todas*, *Sin carátula*, *Sin letra*, *Incompletas*, *MP3*, *M4A*.
+- Lista de canciones organizadas con información de archivo, formato, estado de carátula y estado de letra.
+
+### Pantalla de Edición Detallada
+- **Sección de Carátula**: Visualización de la carátula actual o nueva seleccionada, selector de imágenes desde línea o almacenamiento.
+- **Sección de Letra**:
+  - Visualizador/editor de letra con botón "Buscar Letra en Línea".
+  - Casillas de verificación para guardar como archivo `.lrc` en la carpeta y/o incrustar en el audio.
+- **Formulario de Metadatos**: Título, Artista, Álbum, Año, Género, Pista, Disco.
+- **Búsqueda en Línea Unificada**: Botón destacado para consultar bases de datos. Al seleccionar una coincidencia, se pueblan todos los metadatos y la portada automáticamente.
+- **Previsualización de Cambios y Guardado Físico**: Muestra los cambios exactos que se escribirán en el archivo de disco y ejecuta la escritura en el URI del usuario.
+
+---
+
+## 3. Arquitectura Técnica y Componentes
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        SonicTag UI                              │
+│                           Sound ID                              │
 ├───────────────────────────────┬─────────────────────────────────┤
-│    Biblioteca & Filtros       │   Editor & Previsualización     │
-│  - Tarjetas de canciones      │  - Campos editables             │
-│  - Filtro sin carátula        │  - Comparador Antes/Después     │
-│  - Mini reproductor           │  - Selector de carátulas        │
+│    FolderManager & Storage    │   Metadata & Lyrics Engine      │
+│  - ACTION_OPEN_DOCUMENT_TREE  │  - AudioTagWriter (Direct SAF)  │
+│  - takePersistableUriPerms    │  - MP3: ID3v2.3 + APIC + USLT   │
+│  - DocumentFile Tree Scanner  │  - M4A: atoms + covr + ©lyr     │
+│  - LRC File Writer in folder  │  - LRCLIB API Integration       │
 └───────────────▲───────────────┴────────────────▲────────────────┘
                 │                                │
 ┌───────────────┴────────────────────────────────┴────────────────┐
-│                     MusicViewModel                              │
-│   (StateFlow: libraryState, searchResults, editingSession)      │
-├───────────────────────────────┬─────────────────────────────────┤
-│       MetadataEngine          │       OnlineSearchManager       │
-│  - MediaMetadataRetriever     │  - MusicBrainz API Client       │
-│  - ID3v2 Tag Writer (MP3)     │  - Cover Art Archive Client     │
-│  - MP4 Atom Writer (M4A)      │  - iTunes Search Client         │
-│  - Embedded Picture Extractor │  - Deezer Public Client         │
-└───────────────────────────────┴─────────────────────────────────┘
+│                       MusicViewModel                            │
+│  - activeFolders: StateFlow<List<FolderEntry>>                  │
+│  - libraryTracks: StateFlow<List<AudioTrack>>                   │
+│  - editorSession: StateFlow<EditorUiState>                      │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 4. Plan de Implementación por Fases
+## 4. Plan de Ejecución por Pasos
 
-1. **Configuración de Dependencias**:
-   - Activar `coil-compose` en `build.gradle.kts` para carga de imágenes en Compose.
-   - Declarar permisos necesarios (`READ_MEDIA_AUDIO`, `INTERNET`) en `AndroidManifest.xml`.
-   - Crear canciones de muestra (.mp3 y .m4a sintetizados/generados con audio válido) en el directorio de assets para pruebas inmediatas.
+1. **Renombrado y Limpieza**:
+   - Cambiar nombre a "Sound ID" en `strings.xml`, `metadata.json`, `MainActivity.kt` y pruebas.
+   - Eliminar los archivos demo en `assets/sample_tracks/` y el código de carga de muestras.
 
-2. **Capa de Servicios de Metadatos en Línea**:
-   - Implementar modelos de datos unificados: `OnlineTrackCandidate` y `CoverArtOption`.
-   - Implementar cliente Retrofit para MusicBrainz (`/ws/2/recording` y `/ws/2/release`), Cover Art Archive, iTunes Search API y Deezer Search API.
+2. **Gestión de Carpetas y Permisos SAF**:
+   - Crear `FolderManager` para persistir URIs de carpetas en `SharedPreferences`.
+   - Implementar escáner recursivo de archivos con `DocumentFile` que extrae metadatos con `MediaMetadataRetriever`.
 
-3. **Motor de Etiquetas de Audio (ID3 / MP4)**:
-   - Módulo de lectura mediante `MediaMetadataRetriever`.
-   - Módulo de escritura para MP3 (ID3v2.3 con marco APIC para carátula) y M4A (átomo `covr` y átomos de texto).
-   - Generador y conversor de carátulas (descarga de bytes, compresión JPEG/PNG, incrustación).
+3. **Corrección de Escritura Física de Archivos (`AudioTagWriter`)**:
+   - Adaptar `AudioTagWriter` para escribir directamente a través de `ContentResolver.openOutputStream(targetUri, "wt")`.
+   - Soporte para marco `USLT` (letra) en MP3 y átomo `©lyr` en M4A.
+   - Función para crear o actualizar el archivo `<cancion>.lrc` en la misma carpeta usando `DocumentFile.createFile("text/plain", ...)`.
 
-4. **Componentes de Interfaz de Usuario (Jetpack Compose)**:
-   - `LibraryScreen`: Lista de canciones con buscador, filtros y botón para agregar archivos o canciones demo.
-   - `SongEditorScreen`: Formulario de edición con campos manuales, botón de búsqueda en línea y mini reproductor de audio.
-   - `OnlineResultsSheet`: Lista de resultados encontrados en MusicBrainz, iTunes y Deezer.
-   - `CoverArtPickerSheet`: Cuadrícula de carátulas disponibles en diferentes resoluciones.
-   - `PreviewDiffDialog`: Ventana comparativa de cambios antes de escribir el archivo definitivamente.
+4. **Cliente de Letras (LRCLIB)**:
+   - Implementar `LyricsRepository` que consulte `https://lrclib.net/api/get` con título, artista, álbum y duración.
 
-5. **Verificación y Pruebas**:
-   - Compilación con `compile_applet`.
-   - Verificación de búsqueda con datos reales y guardado de etiquetas en canciones de prueba.
+5. **Corrección de la Selección de Metadatos en UI**:
+   - Asegurar que al pulsar un candidato de búsqueda, se actualicen inmediatamente todos los campos del borrador y se cargue su carátula asociada.
+
+6. **Verificación y Pruebas**:
+   - Compilación completa con `compile_applet`.
+   - Pruebas unitarias de escritura de etiquetas y letras.

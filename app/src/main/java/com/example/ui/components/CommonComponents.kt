@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MusicNote
@@ -182,6 +183,14 @@ fun TrackCard(
                             label = "Incompleto",
                             color = RoseAccent,
                             icon = Icons.Default.Warning
+                        )
+                    }
+
+                    if (track.hasLyrics) {
+                        StatusChip(
+                            label = "Letra",
+                            color = CyanAccent,
+                            icon = Icons.Default.Description
                         )
                     }
 

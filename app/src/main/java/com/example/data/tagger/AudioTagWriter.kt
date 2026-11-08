@@ -7,54 +7,56 @@ import com.example.data.model.AudioFormat
 import com.example.data.model.AudioTrack
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 object AudioTagWriter {
 
-    fun writeTags(
+    /**
+     * Writes updated ID3v2 tags or MP4 atoms directly to the actual audio file on storage
+     * using the ContentResolver stream for SAF documents or standard File for local paths.
+     */
+    fun writeTagsDirectly(
         context: Context,
-        originalTrack: AudioTrack,
+        track: AudioTrack,
         updatedTrack: AudioTrack,
-        coverBytes: ByteArray?
-    ): File? {
+        coverBytes: ByteArray?,
+        lyricsText: String? = null
+    ): Boolean {
         return try {
-            val cacheDir = File(context.cacheDir, "tagged_music").apply { mkdirs() }
-            val outputFile = File(cacheDir, updatedTrack.fileName)
+            val uri = Uri.parse(track.fileUri)
 
-            // Get source bytes from URI or File
-            val sourceBytes: ByteArray = if (originalTrack.filePath != null) {
-                File(originalTrack.filePath).readBytes()
+            // Read original source bytes
+            val sourceBytes: ByteArray = if (uri.scheme == "file") {
+                File(uri.path ?: "").readBytes()
             } else {
-                val uri = Uri.parse(originalTrack.fileUri)
-                if (uri.scheme == "file") {
-                    File(uri.path ?: "").readBytes()
-                } else {
-                    context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                        ?: throw IllegalStateException("Cannot open input stream for ${originalTrack.fileUri}")
-                }
+                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    ?: throw IllegalStateException("No se pudo leer el archivo: ${track.fileUri}")
             }
 
+            // Encode tags
             val finalBytes = when (updatedTrack.format) {
-                AudioFormat.MP3 -> writeMp3Tags(sourceBytes, updatedTrack, coverBytes)
-                AudioFormat.M4A -> writeM4aTags(sourceBytes, updatedTrack, coverBytes)
+                AudioFormat.MP3 -> writeMp3Tags(sourceBytes, updatedTrack, coverBytes, lyricsText)
+                AudioFormat.M4A -> writeM4aTags(sourceBytes, updatedTrack, coverBytes, lyricsText)
             }
 
-            FileOutputStream(outputFile).use { it.write(finalBytes) }
-
-            // If original was a local file in internal/app storage or cache, update it too
-            if (originalTrack.filePath != null && File(originalTrack.filePath).canWrite()) {
-                try {
-                    FileOutputStream(File(originalTrack.filePath)).use { it.write(finalBytes) }
-                } catch (ignored: Exception) {}
+            // Write directly to user's real file
+            if (uri.scheme == "file") {
+                val f = File(uri.path ?: "")
+                FileOutputStream(f).use { it.write(finalBytes) }
+            } else {
+                context.contentResolver.openOutputStream(uri, "wt")?.use { stream ->
+                    stream.write(finalBytes)
+                    stream.flush()
+                } ?: throw IllegalStateException("No se pudo abrir flujo de escritura para $uri")
             }
 
-            outputFile
+            Log.i("AudioTagWriter", "Successfully wrote ${finalBytes.size} bytes directly to ${track.fileName}")
+            true
         } catch (e: Exception) {
-            Log.e("AudioTagWriter", "Failed to write tags to ${updatedTrack.fileName}", e)
-            null
+            Log.e("AudioTagWriter", "Failed to write tags directly to ${track.fileName}", e)
+            false
         }
     }
 
@@ -63,7 +65,8 @@ object AudioTagWriter {
     fun writeMp3Tags(
         originalBytes: ByteArray,
         track: AudioTrack,
-        coverBytes: ByteArray?
+        coverBytes: ByteArray?,
+        lyricsText: String? = null
     ): ByteArray {
         // 1. Identify and skip old ID3v2 tag if present
         var audioStartOffset = 0
@@ -118,6 +121,21 @@ object AudioTagWriter {
             framesStream.write(ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(cBytes.size).array())
             framesStream.write(byteArrayOf(0x00, 0x00))
             framesStream.write(cBytes)
+        }
+
+        // Embedded Lyrics (USLT frame in ID3v2.3)
+        val lyrics = lyricsText ?: track.lyrics
+        if (lyrics.isNotBlank()) {
+            val usltData = ByteArrayOutputStream()
+            usltData.write(0x03) // UTF-8 encoding
+            usltData.write("eng".toByteArray(Charsets.US_ASCII)) // language: 3 bytes
+            usltData.write(0x00) // null-terminated descriptor
+            usltData.write(lyrics.toByteArray(Charsets.UTF_8))
+            val uBytes = usltData.toByteArray()
+            framesStream.write("USLT".toByteArray(Charsets.US_ASCII))
+            framesStream.write(ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(uBytes.size).array())
+            framesStream.write(byteArrayOf(0x00, 0x00)) // flags
+            framesStream.write(uBytes)
         }
 
         // APIC (Attached picture / Cover art)
@@ -177,13 +195,13 @@ object AudioTagWriter {
     fun writeM4aTags(
         originalBytes: ByteArray,
         track: AudioTrack,
-        coverBytes: ByteArray?
+        coverBytes: ByteArray?,
+        lyricsText: String? = null
     ): ByteArray {
-        val newUdta = buildM4aUdtaAtom(track, coverBytes ?: track.coverArtBytes)
+        val newUdta = buildM4aUdtaAtom(track, coverBytes ?: track.coverArtBytes, lyricsText ?: track.lyrics)
         val (moovStart, moovLength) = findTopLevelAtom(originalBytes, "moov")
 
         if (moovStart == -1 || moovLength <= 8) {
-            // If moov is somehow not found at top level, return as-is
             return originalBytes
         }
 
@@ -216,7 +234,6 @@ object AudioTagWriter {
             val size = ByteBuffer.wrap(bytes, offset, 4).order(ByteOrder.BIG_ENDIAN).int
             val name = String(bytes, offset + 4, 4, Charsets.US_ASCII)
             val actualSize = if (size == 1 && offset + 16 <= bytes.size) {
-                // 64-bit size
                 ByteBuffer.wrap(bytes, offset + 8, 8).order(ByteOrder.BIG_ENDIAN).long.toInt()
             } else if (size == 0) {
                 bytes.size - offset
@@ -233,7 +250,11 @@ object AudioTagWriter {
         return Pair(-1, 0)
     }
 
-    private fun buildM4aUdtaAtom(track: AudioTrack, coverBytes: ByteArray?): ByteArray {
+    private fun buildM4aUdtaAtom(
+        track: AudioTrack,
+        coverBytes: ByteArray?,
+        lyrics: String
+    ): ByteArray {
         val ilstStream = ByteArrayOutputStream()
 
         fun writeTextItem(fourCc: String, value: String) {
@@ -285,7 +306,12 @@ object AudioTagWriter {
         track.trackNumber.toIntOrNull()?.let { writeInt16Item("trkn", it, 0) }
         track.discNumber.toIntOrNull()?.let { writeInt16Item("disk", it, 0) }
 
-        // covr
+        // Embedded lyrics in M4A (©lyr atom)
+        if (lyrics.isNotBlank()) {
+            writeTextItem("\u00a9lyr", lyrics)
+        }
+
+        // covr (Cover art in M4A)
         if (coverBytes != null && coverBytes.isNotEmpty()) {
             val isPng = coverBytes.size > 8 &&
                     coverBytes[0] == 0x89.toByte() &&
@@ -328,7 +354,7 @@ object AudioTagWriter {
         hdlrAtom.putInt(0) // component flags mask
         hdlrAtom.put(0.toByte()) // component name null string
 
-        // meta atom (4 bytes size, 4 bytes "meta", 4 bytes version/flags=0, then hdlr, then ilst)
+        // meta atom
         val metaLen = 12 + hdlrAtom.capacity() + ilstAtomLen
         val metaAtom = ByteBuffer.allocate(metaLen).order(ByteOrder.BIG_ENDIAN)
         metaAtom.putInt(metaLen)
@@ -358,7 +384,6 @@ object AudioTagWriter {
             if (atomSize <= 0) break
 
             if (atomName == "udta") {
-                // Replace old udta with new udta
                 out.write(newUdtaBytes)
                 replaced = true
             } else {
@@ -368,7 +393,6 @@ object AudioTagWriter {
         }
 
         if (!replaced) {
-            // Append new udta to end of moov children
             out.write(newUdtaBytes)
         }
 
@@ -383,7 +407,6 @@ object AudioTagWriter {
 
     private fun adjustChunkOffsets(moovBytes: ByteArray, delta: Int): ByteArray {
         val buffer = ByteBuffer.wrap(moovBytes).order(ByteOrder.BIG_ENDIAN)
-        var offset = 8
         scanAndAdjustStco(buffer, 8, moovBytes.size, delta)
         return moovBytes
     }
@@ -401,11 +424,9 @@ object AudioTagWriter {
 
             when (name) {
                 "trak", "mdia", "minf", "stbl" -> {
-                    // Container atoms, recurse inside
                     scanAndAdjustStco(buffer, pos + 8, pos + atomSize, delta)
                 }
                 "stco" -> {
-                    // stco: 4 bytes size, 4 bytes name, 4 bytes flags/version, 4 bytes entry count
                     if (pos + 16 <= end) {
                         val entryCount = buffer.getInt(pos + 12)
                         var entryPos = pos + 16

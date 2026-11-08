@@ -1,6 +1,6 @@
 {
-  "summary":  "Implementation plan for SonicTag, an advanced MP3 & M4A metadata and album cover art editor for Android with support for MusicBrainz, Cover Art Archive, iTunes, and Deezer APIs, side-by-side preview, multi-source cover art picker, embedded audio player, and music library organizer.",
-  "updatedAt":  "2026-11-07T22:58:18.740289553Z",
+  "summary":  "Plan de actualización para Sound ID: renombrado de la app, escaneo y gestión de carpetas de música con SAF permanente, corrección crítica de guardado real de carátulas y etiquetas directamente en los archivos originales, solución a la selección de metadatos de candidatos online, y nueva función de descarga e incrustación de letras (.lrc y tags USLT/©lyr).",
+  "updatedAt":  "2026-11-08T00:38:45.725649657Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

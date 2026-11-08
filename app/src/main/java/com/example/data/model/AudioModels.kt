@@ -39,11 +39,14 @@ data class AudioTrack(
     val trackNumber: String = "",
     val discNumber: String = "",
     val comment: String = "",
+    val lyrics: String = "",
     val durationMs: Long = 0L,
     val sizeBytes: Long = 0L,
     val hasCover: Boolean = false,
     val coverArtBytes: ByteArray? = null,
-    val isDemoTrack: Boolean = false,
+    val hasLyrics: Boolean = false,
+    val parentFolderUri: String? = null,
+    val treeUriString: String? = null,
     val dateModified: Long = System.currentTimeMillis()
 ) {
     val displayTitle: String
@@ -74,6 +77,27 @@ data class AudioTrack(
     }
 
     override fun hashCode(): Int = id.hashCode()
+}
+
+data class MusicFolder(
+    val uriString: String,
+    val displayName: String,
+    val trackCount: Int = 0
+)
+
+data class LyricsResult(
+    val trackName: String,
+    val artistName: String,
+    val plainLyrics: String? = null,
+    val syncedLyrics: String? = null,
+    val source: String = "LRCLIB"
+) {
+    val bestLyrics: String
+        get() = when {
+            !syncedLyrics.isNullOrBlank() -> syncedLyrics
+            !plainLyrics.isNullOrBlank() -> plainLyrics
+            else -> ""
+        }
 }
 
 data class OnlineCandidate(
