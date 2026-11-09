@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,6 +24,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -44,6 +46,7 @@ fun SongEditorScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val editorState by viewModel.editorState.collectAsStateWithLifecycle()
     val playerState by viewModel.audioPlayer.playerState.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -301,6 +304,39 @@ fun SongEditorScreen(
                         style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                         maxLines = 1
                     )
+
+                    val selectedCoverBytes = editorState.selectedCoverOption?.bytes
+                    val hasCoverBytes = (draft.coverArtBytes != null && draft.coverArtBytes.isNotEmpty()) ||
+                            (selectedCoverBytes != null && selectedCoverBytes.isNotEmpty())
+                    if (hasCoverBytes) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedButton(
+                            onClick = { viewModel.analyzeCoverWithGemini(context) },
+                            enabled = !editorState.isGeminiLoading,
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, VioletAccent.copy(alpha = 0.7f)),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = VioletAccent.copy(alpha = 0.12f)
+                            ),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.testTag("btn_gemini_cover_ocr")
+                        ) {
+                            if (editorState.isGeminiLoading) {
+                                CircularProgressIndicator(color = VioletAccent, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Analizando con Gemini...", color = VioletAccent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            } else {
+                                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = VioletAccent, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                val label = if (settings.geminiEnabled && settings.geminiApiKey.isNotBlank()) {
+                                    "Identificar con Gemini (${settings.geminiModel})"
+                                } else {
+                                    "Identificar con Gemini (Compartir)"
+                                }
+                                Text(label, color = VioletAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -519,21 +555,44 @@ fun SongEditorScreen(
                             )
                         }
 
-                        Button(
-                            onClick = { viewModel.searchLyricsForCurrentTrack() },
-                            enabled = !editorState.isSearchingLyrics,
-                            colors = ButtonDefaults.buttonColors(containerColor = accent),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            modifier = Modifier.testTag("btn_search_lyrics")
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            if (editorState.isSearchingLyrics) {
-                                CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Buscando...", color = Color.Black, fontSize = 11.sp)
-                            } else {
-                                Icon(Icons.Default.Search, contentDescription = null, tint = Color.Black, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Buscar en LRCLIB", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            Button(
+                                onClick = { viewModel.searchLyricsForCurrentTrack() },
+                                enabled = !editorState.isSearchingLyrics && !editorState.isGeminiLoading,
+                                colors = ButtonDefaults.buttonColors(containerColor = accent),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.testTag("btn_search_lyrics")
+                            ) {
+                                if (editorState.isSearchingLyrics) {
+                                    CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Buscando...", color = Color.Black, fontSize = 11.sp)
+                                } else {
+                                    Icon(Icons.Default.Search, contentDescription = null, tint = Color.Black, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("LRCLIB", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                }
+                            }
+
+                            Button(
+                                onClick = { viewModel.fetchLyricsWithGemini(context) },
+                                enabled = !editorState.isGeminiLoading && !editorState.isSearchingLyrics,
+                                colors = ButtonDefaults.buttonColors(containerColor = VioletAccent),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.testTag("btn_gemini_lyrics")
+                            ) {
+                                if (editorState.isGeminiLoading) {
+                                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Gemini...", color = Color.White, fontSize = 11.sp)
+                                } else {
+                                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Gemini", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                }
                             }
                         }
                     }
@@ -759,7 +818,8 @@ fun SongEditorScreen(
             onSearchQuery = { q -> viewModel.searchOnlineForCurrentTrack(q) },
             onAdvancedSearch = { t, a, al -> viewModel.searchOnlineAdvanced(t, a, al) },
             onSelectCandidate = { candidate -> viewModel.selectCandidate(candidate) },
-            onDismiss = { viewModel.hideCandidateSheet() }
+            onDismiss = { viewModel.hideCandidateSheet() },
+            onGeminiSearch = { viewModel.searchWithGeminiInResults(context, queryDefault) }
         )
     }
 

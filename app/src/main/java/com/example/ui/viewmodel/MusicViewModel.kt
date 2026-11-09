@@ -1,11 +1,14 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.content.Context
 import android.net.Uri
 import android.util.Log
+import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.*
+import com.example.data.remote.GeminiRepository
 import com.example.data.remote.LyricsRepository
 import com.example.data.remote.OnlineMetadataRepository
 import com.example.data.storage.AccentColorPreset
@@ -17,6 +20,7 @@ import com.example.data.tagger.AudioTagReader
 import com.example.data.tagger.AudioTagWriter
 import com.example.player.AudioPreviewPlayer
 import com.example.ui.util.AudioThumbnailLoader
+import com.example.ui.util.GeminiPromptHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -62,13 +66,16 @@ data class EditorUiState(
     val showDiffDialog: Boolean = false,
     val diffList: List<TagDiff> = emptyList(),
     val isSaving: Boolean = false,
-    val saveNotification: String? = null
+    val saveNotification: String? = null,
+    val isGeminiLoading: Boolean = false,
+    val geminiStatusMessage: String? = null
 )
 
 class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     private val onlineRepo = OnlineMetadataRepository()
     private val lyricsRepo = LyricsRepository()
+    private val geminiRepo = GeminiRepository()
     val folderManager = FolderManager(application)
     val audioPlayer = AudioPreviewPlayer(application)
     val settingsManager = SettingsManager(application)
@@ -434,6 +441,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         if (s.sourceSpotify) list.add(MetadataSource.SPOTIFY)
         if (s.sourceLastFm) list.add(MetadataSource.LASTFM)
         if (s.sourceDiscogs) list.add(MetadataSource.DISCOGS)
+        if (s.geminiEnabled) list.add(MetadataSource.GEMINI)
         return list
     }
 
@@ -773,6 +781,177 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
             }
+        }
+    }
+
+    // ==================== GEMINI AI INTEGRATION ====================
+
+    fun analyzeCoverWithGemini(context: Context) {
+        val draft = _editorState.value.draftTrack ?: return
+        val coverBytes = draft.coverArtBytes ?: _editorState.value.selectedCoverOption?.bytes
+
+        if (coverBytes == null || coverBytes.isEmpty()) {
+            Toast.makeText(context, "No hay carátula incrustada para analizar.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val s = _settings.value
+        if (s.geminiEnabled && s.geminiApiKey.isNotBlank()) {
+            // Enfoque 2: Integración Nativa con API Key
+            viewModelScope.launch {
+                _editorState.update {
+                    it.copy(
+                        isGeminiLoading = true,
+                        geminiStatusMessage = "Analizando carátula con Google Gemini (${s.geminiModel})..."
+                    )
+                }
+
+                val result = geminiRepo.analyzeCoverImage(
+                    coverBytes = coverBytes,
+                    apiKey = s.geminiApiKey,
+                    model = s.geminiModel,
+                    hintTitle = draft.title,
+                    hintArtist = draft.artist
+                )
+
+                _editorState.update { state ->
+                    val curDraft = state.draftTrack ?: return@update state
+                    result.fold(
+                        onSuccess = { candidate ->
+                            state.copy(
+                                isGeminiLoading = false,
+                                geminiStatusMessage = null,
+                                draftTrack = curDraft.copy(
+                                    title = candidate.title.ifBlank { curDraft.title },
+                                    artist = candidate.artist.ifBlank { curDraft.artist },
+                                    album = candidate.album.ifBlank { curDraft.album },
+                                    year = candidate.year.ifBlank { curDraft.year },
+                                    genre = candidate.genre.ifBlank { curDraft.genre },
+                                    trackNumber = candidate.trackNumber.ifBlank { curDraft.trackNumber }
+                                ),
+                                saveNotification = "Metadatos identificados con Gemini: ${candidate.title} — ${candidate.artist}"
+                            )
+                        },
+                        onFailure = { err ->
+                            state.copy(
+                                isGeminiLoading = false,
+                                geminiStatusMessage = null,
+                                saveNotification = "Error Gemini: ${err.localizedMessage ?: "Fallo al analizar"}"
+                            )
+                        }
+                    )
+                }
+            }
+        } else {
+            // Enfoque 1: Compartir asistido (Sin API Key)
+            val prompt = GeminiPromptHelper.buildCoverOcrPrompt(
+                fileName = draft.fileName,
+                existingTitle = draft.title,
+                existingArtist = draft.artist,
+                existingAlbum = draft.album
+            )
+            GeminiPromptHelper.shareCoverWithPrompt(context, prompt, coverBytes)
+        }
+    }
+
+    fun fetchLyricsWithGemini(context: Context) {
+        val draft = _editorState.value.draftTrack ?: return
+        val s = _settings.value
+
+        if (s.geminiEnabled && s.geminiApiKey.isNotBlank()) {
+            // Enfoque 2: Integración Nativa con API Key
+            viewModelScope.launch {
+                _editorState.update {
+                    it.copy(
+                        isGeminiLoading = true,
+                        geminiStatusMessage = "Buscando / formateando letra con Google Gemini..."
+                    )
+                }
+
+                val title = draft.title.ifBlank { draft.fileName.substringBeforeLast(".") }
+                val result = geminiRepo.fetchLyrics(
+                    title = title,
+                    artist = draft.artist,
+                    album = draft.album,
+                    apiKey = s.geminiApiKey,
+                    model = s.geminiModel
+                )
+
+                _editorState.update { state ->
+                    val curDraft = state.draftTrack ?: return@update state
+                    result.fold(
+                        onSuccess = { lyricsRes ->
+                            val clean = lyricsRes.bestLyrics.trim()
+                            state.copy(
+                                isGeminiLoading = false,
+                                geminiStatusMessage = null,
+                                draftTrack = curDraft.copy(
+                                    lyrics = clean,
+                                    hasLyrics = clean.isNotBlank()
+                                ),
+                                saveNotification = "Letra obtenida con Gemini (${lyricsRes.source})"
+                            )
+                        },
+                        onFailure = { err ->
+                            state.copy(
+                                isGeminiLoading = false,
+                                geminiStatusMessage = null,
+                                saveNotification = "Error Gemini: ${err.localizedMessage ?: "No se pudo obtener la letra"}"
+                            )
+                        }
+                    )
+                }
+            }
+        } else {
+            // Enfoque 1: Compartir asistido (Sin API Key)
+            val prompt = GeminiPromptHelper.buildLyricsPrompt(
+                title = draft.title,
+                artist = draft.artist,
+                album = draft.album
+            )
+            GeminiPromptHelper.shareTextPrompt(context, prompt, "Consultar Letra con Gemini...")
+        }
+    }
+
+    fun searchWithGeminiInResults(context: Context, query: String) {
+        val draft = _editorState.value.draftTrack ?: return
+        val s = _settings.value
+
+        if (s.geminiEnabled && s.geminiApiKey.isNotBlank()) {
+            viewModelScope.launch {
+                _editorState.update { it.copy(isSearchingOnline = true) }
+                val existingTags = mapOf(
+                    "title" to draft.title,
+                    "artist" to draft.artist,
+                    "album" to draft.album,
+                    "query" to query
+                )
+                val result = geminiRepo.resolveMetadataFromText(
+                    fileName = draft.fileName,
+                    existingTags = existingTags,
+                    apiKey = s.geminiApiKey,
+                    model = s.geminiModel
+                )
+                _editorState.update { state ->
+                    val candidate = result.getOrNull()
+                    val updatedCandidates = if (candidate != null) {
+                        listOf(candidate) + state.onlineCandidates
+                    } else {
+                        state.onlineCandidates
+                    }
+                    state.copy(
+                        isSearchingOnline = false,
+                        onlineCandidates = updatedCandidates,
+                        saveNotification = if (candidate != null) "Canción resuelta por Gemini AI" else "Gemini no pudo resolver la canción."
+                    )
+                }
+            }
+        } else {
+            val prompt = GeminiPromptHelper.buildDisambiguationPrompt(
+                fileName = draft.fileName,
+                existingTags = mapOf("title" to draft.title, "artist" to draft.artist, "album" to draft.album)
+            )
+            GeminiPromptHelper.shareTextPrompt(context, prompt, "Resolver canción con Gemini...")
         }
     }
 

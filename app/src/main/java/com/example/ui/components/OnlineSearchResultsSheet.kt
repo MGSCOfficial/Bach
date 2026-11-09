@@ -55,7 +55,8 @@ fun OnlineSearchResultsSheet(
     onSearchQuery: (String) -> Unit,
     onAdvancedSearch: (title: String, artist: String, album: String) -> Unit = { _, _, _ -> },
     onSelectCandidate: (OnlineCandidate) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onGeminiSearch: (() -> Unit)? = null
 ) {
     val accent = LocalAccentColor.current
     val cleanInitialQuery = initialQuery.replace("\uFEFF", "").replace("\u200B", "").trim()
@@ -435,14 +436,31 @@ fun OnlineSearchResultsSheet(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(200.dp),
+                        .height(220.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "No se encontraron coincidencias. Prueba ajustando el nombre en el buscador.",
-                        color = StudioTextMuted,
-                        fontSize = 14.sp
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = "No se encontraron coincidencias en las fuentes activas.",
+                            color = StudioTextMuted,
+                            fontSize = 14.sp
+                        )
+                        if (onGeminiSearch != null) {
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Button(
+                                onClick = onGeminiSearch,
+                                colors = ButtonDefaults.buttonColors(containerColor = VioletAccent),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Resolver con Google Gemini AI", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            }
+                        }
+                    }
                 }
             } else {
                 LazyColumn(
