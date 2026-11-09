@@ -26,6 +26,7 @@ enum class MetadataSource(val displayName: String) {
     SPOTIFY("Spotify"),
     LASTFM("Last.fm"),
     DISCOGS("Discogs"),
+    GEMINI("Google Gemini"),
     MANUAL("Manual");
 }
 

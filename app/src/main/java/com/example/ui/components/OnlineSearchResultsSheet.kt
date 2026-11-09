@@ -395,6 +395,7 @@ fun OnlineSearchResultsSheet(
                         MetadataSource.SPOTIFY -> EmeraldAccent
                         MetadataSource.LASTFM -> AmberAccent
                         MetadataSource.DISCOGS -> CyanAccent
+                        MetadataSource.GEMINI -> VioletAccent
                         MetadataSource.MANUAL -> accent
                     }
                     FilterChip(
@@ -585,6 +586,7 @@ fun CandidateDetailedCard(
                                 MetadataSource.SPOTIFY -> EmeraldAccent
                                 MetadataSource.LASTFM -> AmberAccent
                                 MetadataSource.DISCOGS -> CyanAccent
+                                MetadataSource.GEMINI -> VioletAccent
                                 MetadataSource.MANUAL -> accent
                             }
                             Surface(
@@ -844,6 +846,7 @@ fun CandidatePreviewDialog(
                         MetadataSource.SPOTIFY -> EmeraldAccent
                         MetadataSource.LASTFM -> AmberAccent
                         MetadataSource.DISCOGS -> CyanAccent
+                        MetadataSource.GEMINI -> VioletAccent
                         MetadataSource.MANUAL -> accent
                     }
                     Surface(
