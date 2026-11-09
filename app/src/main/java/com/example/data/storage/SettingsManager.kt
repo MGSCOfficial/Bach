@@ -51,7 +51,12 @@ data class AppSettings(
     val lyricsSourceGenius: Boolean = false,
     val lyricsSourceMusixmatch: Boolean = false,
     val geniusToken: String = "",
-    val musixmatchApiKey: String = ""
+    val musixmatchApiKey: String = "",
+
+    // Google Gemini AI
+    val geminiEnabled: Boolean = false,
+    val geminiApiKey: String = "",
+    val geminiModel: String = "gemini-2.5-flash"
 )
 
 class SettingsManager(context: Context) {
@@ -90,6 +95,11 @@ class SettingsManager(context: Context) {
         private const val KEY_LYR_MUSIXMATCH = "pref_lyr_musixmatch"
         private const val KEY_KEY_GENIUS = "pref_key_genius"
         private const val KEY_KEY_MUSIXMATCH = "pref_key_musixmatch"
+
+        // Gemini AI
+        private const val KEY_GEMINI_ENABLED = "pref_gemini_enabled"
+        private const val KEY_GEMINI_API_KEY = "pref_gemini_api_key"
+        private const val KEY_GEMINI_MODEL = "pref_gemini_model"
     }
 
     fun loadSettings(): AppSettings {
@@ -136,7 +146,11 @@ class SettingsManager(context: Context) {
             lyricsSourceGenius = prefs.getBoolean(KEY_LYR_GENIUS, false),
             lyricsSourceMusixmatch = prefs.getBoolean(KEY_LYR_MUSIXMATCH, false),
             geniusToken = prefs.getString(KEY_KEY_GENIUS, "") ?: "",
-            musixmatchApiKey = prefs.getString(KEY_KEY_MUSIXMATCH, "") ?: ""
+            musixmatchApiKey = prefs.getString(KEY_KEY_MUSIXMATCH, "") ?: "",
+
+            geminiEnabled = prefs.getBoolean(KEY_GEMINI_ENABLED, false),
+            geminiApiKey = prefs.getString(KEY_GEMINI_API_KEY, "") ?: "",
+            geminiModel = prefs.getString(KEY_GEMINI_MODEL, "gemini-2.5-flash") ?: "gemini-2.5-flash"
         )
     }
 
@@ -195,8 +209,21 @@ class SettingsManager(context: Context) {
             "discogs" -> KEY_KEY_DISCOGS
             "genius" -> KEY_KEY_GENIUS
             "musixmatch" -> KEY_KEY_MUSIXMATCH
+            "gemini" -> KEY_GEMINI_API_KEY
             else -> return
         }
         prefs.edit().putString(prefKey, value.trim()).apply()
+    }
+
+    fun setGeminiEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_GEMINI_ENABLED, enabled).apply()
+    }
+
+    fun setGeminiApiKey(key: String) {
+        prefs.edit().putString(KEY_GEMINI_API_KEY, key.trim()).apply()
+    }
+
+    fun setGeminiModel(model: String) {
+        prefs.edit().putString(KEY_GEMINI_MODEL, model.trim()).apply()
     }
 }

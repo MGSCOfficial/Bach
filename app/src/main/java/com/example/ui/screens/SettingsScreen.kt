@@ -1,6 +1,9 @@
 package com.example.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,9 +23,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -480,7 +485,133 @@ fun SettingsScreen(
                 }
             }
 
-            // ==================== SECCIÓN 5: ACERCA DE ====================
+            // ==================== SECCIÓN 5: INTELIGENCIA ARTIFICIAL (GOOGLE GEMINI) ====================
+            SettingsSectionHeader(title = "Inteligencia Artificial (Google Gemini)", icon = Icons.Default.AutoAwesome, tint = accent)
+
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = CardDefaults.outlinedCardBorder().copy(
+                    brush = SolidColor(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+                )
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    SettingsSwitchRow(
+                        title = "Habilitar Google Gemini",
+                        subtitle = "Identificación multimodal (OCR de carátula) y búsqueda/transcripción de letras",
+                        checked = settings.geminiEnabled,
+                        accentColor = accent,
+                        onCheckedChange = { viewModel.updateGeminiEnabled(it) }
+                    )
+
+                    if (settings.geminiEnabled) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Fila de API Key con botón para configurar y enlace directo
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text(
+                                    text = "Clave de API de Gemini",
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                )
+                                Text(
+                                    text = if (settings.geminiApiKey.isNotBlank()) "Configurada (••••${settings.geminiApiKey.takeLast(4)})" else "No configurada (Requerida para funciones in-app)",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = if (settings.geminiApiKey.isNotBlank()) accent else MaterialTheme.colorScheme.error
+                                    )
+                                )
+                            }
+                            IconButton(
+                                onClick = { activeApiKeyTarget = ApiKeyTarget.GEMINI },
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Key,
+                                    contentDescription = "Configurar Clave Gemini",
+                                    tint = if (settings.geminiApiKey.isNotBlank()) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Botón para obtener API Key gratuita en Google AI Studio
+                        val context = LocalContext.current
+                        OutlinedButton(
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/apikey"))
+                                context.startActivity(intent)
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = accent)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.OpenInNew,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Obtener clave gratuita en Google AI Studio", fontSize = 12.sp)
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Selector de Modelo
+                        Text(
+                            text = "Modelo de Gemini",
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            val models = listOf(
+                                "gemini-2.5-flash" to "Flash (Rápido)",
+                                "gemini-2.5-pro" to "Pro (Preciso)"
+                            )
+                            models.forEach { (modelId, modelLabel) ->
+                                val selected = settings.geminiModel == modelId
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (selected) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
+                                    border = BorderStroke(1.dp, if (selected) accent else Color.Transparent),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable { viewModel.updateGeminiModel(modelId) }
+                                ) {
+                                    Text(
+                                        text = modelLabel,
+                                        fontSize = 12.sp,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (selected) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(vertical = 10.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ==================== SECCIÓN 6: ACERCA DE ====================
             SettingsSectionHeader(title = "Acerca de la Aplicación", icon = Icons.Default.Info, tint = accent)
 
             Card(
@@ -701,7 +832,8 @@ enum class ApiKeyTarget(val title: String, val field1Label: String, val field2La
     LASTFM("Last.fm API", "API Key"),
     DISCOGS("Discogs", "Personal Access Token"),
     GENIUS("Genius API", "Client Access Token"),
-    MUSIXMATCH("Musixmatch API", "API Key");
+    MUSIXMATCH("Musixmatch API", "API Key"),
+    GEMINI("Google Gemini (AI Studio)", "API Key");
 
     fun getCurrentKey1(settings: com.example.data.storage.AppSettings): String = when (this) {
         SPOTIFY -> settings.spotifyClientId
@@ -709,6 +841,7 @@ enum class ApiKeyTarget(val title: String, val field1Label: String, val field2La
         DISCOGS -> settings.discogsToken
         GENIUS -> settings.geniusToken
         MUSIXMATCH -> settings.musixmatchApiKey
+        GEMINI -> settings.geminiApiKey
     }
 
     fun getCurrentKey2(settings: com.example.data.storage.AppSettings): String = when (this) {
@@ -726,6 +859,7 @@ enum class ApiKeyTarget(val title: String, val field1Label: String, val field2La
             DISCOGS -> viewModel.updateApiKey("discogs", key1)
             GENIUS -> viewModel.updateApiKey("genius", key1)
             MUSIXMATCH -> viewModel.updateApiKey("musixmatch", key1)
+            GEMINI -> viewModel.updateGeminiApiKey(key1)
         }
     }
 }

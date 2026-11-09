@@ -127,6 +127,21 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         _settings.value = settingsManager.loadSettings()
     }
 
+    fun updateGeminiEnabled(enabled: Boolean) {
+        settingsManager.setGeminiEnabled(enabled)
+        _settings.update { it.copy(geminiEnabled = enabled) }
+    }
+
+    fun updateGeminiApiKey(key: String) {
+        settingsManager.setGeminiApiKey(key)
+        _settings.update { it.copy(geminiApiKey = key) }
+    }
+
+    fun updateGeminiModel(model: String) {
+        settingsManager.setGeminiModel(model)
+        _settings.update { it.copy(geminiModel = model) }
+    }
+
     init {
         loadInitialLibrary()
     }
