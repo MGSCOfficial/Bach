@@ -214,6 +214,7 @@ fun SongEditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
@@ -615,7 +616,8 @@ fun SongEditorScreen(
                             focusedContainerColor = cardVariantBg,
                             unfocusedContainerColor = cardVariantBg,
                             focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            cursorColor = accent
                         )
                     )
 
@@ -695,6 +697,7 @@ fun SongEditorScreen(
                 value = draft.title,
                 onValueChange = { viewModel.updateDraftField(title = it) },
                 icon = Icons.Default.MusicNote,
+                isAmoled = isAmoled,
                 testTag = "input_title"
             )
 
@@ -706,6 +709,7 @@ fun SongEditorScreen(
                 value = draft.artist,
                 onValueChange = { viewModel.updateDraftField(artist = it) },
                 icon = Icons.Default.Person,
+                isAmoled = isAmoled,
                 testTag = "input_artist"
             )
 
@@ -717,6 +721,7 @@ fun SongEditorScreen(
                 value = draft.album,
                 onValueChange = { viewModel.updateDraftField(album = it) },
                 icon = Icons.Default.Album,
+                isAmoled = isAmoled,
                 testTag = "input_album"
             )
 
@@ -728,6 +733,7 @@ fun SongEditorScreen(
                 value = draft.albumArtist,
                 onValueChange = { viewModel.updateDraftField(albumArtist = it) },
                 icon = Icons.Default.Group,
+                isAmoled = isAmoled,
                 testTag = "input_album_artist"
             )
 
@@ -743,6 +749,7 @@ fun SongEditorScreen(
                     value = draft.year,
                     onValueChange = { viewModel.updateDraftField(year = it) },
                     icon = Icons.Default.CalendarToday,
+                    isAmoled = isAmoled,
                     modifier = Modifier.weight(1f),
                     testTag = "input_year"
                 )
@@ -752,6 +759,7 @@ fun SongEditorScreen(
                     value = draft.genre,
                     onValueChange = { viewModel.updateDraftField(genre = it) },
                     icon = Icons.Default.Category,
+                    isAmoled = isAmoled,
                     modifier = Modifier.weight(1f),
                     testTag = "input_genre"
                 )
@@ -769,6 +777,7 @@ fun SongEditorScreen(
                     value = draft.trackNumber,
                     onValueChange = { viewModel.updateDraftField(trackNumber = it) },
                     icon = Icons.Default.FormatListNumbered,
+                    isAmoled = isAmoled,
                     modifier = Modifier.weight(1f),
                     testTag = "input_track_number"
                 )
@@ -778,6 +787,7 @@ fun SongEditorScreen(
                     value = draft.discNumber,
                     onValueChange = { viewModel.updateDraftField(discNumber = it) },
                     icon = Icons.Default.DiscFull,
+                    isAmoled = isAmoled,
                     modifier = Modifier.weight(1f),
                     testTag = "input_disc_number"
                 )
@@ -792,6 +802,7 @@ fun SongEditorScreen(
                 onValueChange = { viewModel.updateDraftField(comment = it) },
                 icon = Icons.Default.Comment,
                 singleLine = false,
+                isAmoled = isAmoled,
                 testTag = "input_comment"
             )
 
@@ -855,15 +866,24 @@ fun EditorTextField(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     modifier: Modifier = Modifier,
     singleLine: Boolean = true,
-    testTag: String = ""
+    testTag: String = "",
+    isAmoled: Boolean = false
 ) {
     val accent = LocalAccentColor.current
+    val containerBg = if (isAmoled) AmoledCardSurface else MaterialTheme.colorScheme.surface
+    val borderCol = if (isAmoled) AmoledBorder else MaterialTheme.colorScheme.outlineVariant
+
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(label) },
         leadingIcon = {
-            Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
         },
         modifier = modifier
             .fillMaxWidth()
@@ -871,14 +891,18 @@ fun EditorTextField(
         shape = RoundedCornerShape(12.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = accent,
-            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-            focusedContainerColor = MaterialTheme.colorScheme.surface,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+            unfocusedBorderColor = borderCol,
+            focusedContainerColor = containerBg,
+            unfocusedContainerColor = containerBg,
             focusedTextColor = MaterialTheme.colorScheme.onSurface,
             unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+            cursorColor = accent,
             focusedLabelColor = accent,
             unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
         ),
-        singleLine = singleLine
+        singleLine = singleLine,
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+            imeAction = if (singleLine) androidx.compose.ui.text.input.ImeAction.Next else androidx.compose.ui.text.input.ImeAction.Default
+        )
     )
 }
