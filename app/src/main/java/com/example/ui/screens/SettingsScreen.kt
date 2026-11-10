@@ -583,8 +583,8 @@ fun SettingsScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             val models = listOf(
-                                "gemini-2.5-flash" to "Flash (Rápido)",
-                                "gemini-2.5-pro" to "Pro (Preciso)"
+                                "gemini-3.8-flash" to "Flash (Recomendado)",
+                                "gemini-3.8-pro" to "Pro (Alta Precisión)"
                             )
                             models.forEach { (modelId, modelLabel) ->
                                 val selected = settings.geminiModel == modelId

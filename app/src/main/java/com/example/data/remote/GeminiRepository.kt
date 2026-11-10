@@ -27,12 +27,18 @@ class GeminiRepository(
         private const val TAG = "GeminiRepository"
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+
+        fun resolveModel(model: String): String = when (model.trim()) {
+            "gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash" -> "gemini-3.8-flash"
+            "gemini-2.5-pro", "gemini-1.5-pro" -> "gemini-3.8-pro"
+            else -> model.trim().ifBlank { "gemini-3.8-flash" }
+        }
     }
 
     suspend fun analyzeCoverImage(
         coverBytes: ByteArray,
         apiKey: String,
-        model: String = "gemini-2.5-flash",
+        model: String = "gemini-3.8-flash",
         hintTitle: String = "",
         hintArtist: String = ""
     ): Result<OnlineCandidate> = withContext(Dispatchers.IO) {
@@ -89,7 +95,7 @@ class GeminiRepository(
                 put("generationConfig", genConfig)
             }
 
-            val endpoint = "$BASE_URL/$model:generateContent?key=${apiKey.trim()}"
+            val endpoint = "$BASE_URL/${resolveModel(model)}:generateContent?key=${apiKey.trim()}"
             val request = Request.Builder()
                 .url(endpoint)
                 .post(requestJson.toString().toRequestBody(JSON_MEDIA_TYPE))
@@ -140,7 +146,7 @@ class GeminiRepository(
         artist: String,
         album: String = "",
         apiKey: String,
-        model: String = "gemini-2.5-flash"
+        model: String = "gemini-3.8-flash"
     ): Result<LyricsResult> = withContext(Dispatchers.IO) {
         if (apiKey.isBlank()) {
             return@withContext Result.failure(
@@ -185,7 +191,7 @@ class GeminiRepository(
                 put("generationConfig", genConfig)
             }
 
-            val endpoint = "$BASE_URL/$model:generateContent?key=${apiKey.trim()}"
+            val endpoint = "$BASE_URL/${resolveModel(model)}:generateContent?key=${apiKey.trim()}"
             val request = Request.Builder()
                 .url(endpoint)
                 .post(requestJson.toString().toRequestBody(JSON_MEDIA_TYPE))
@@ -240,7 +246,7 @@ class GeminiRepository(
         fileName: String,
         existingTags: Map<String, String>,
         apiKey: String,
-        model: String = "gemini-2.5-flash"
+        model: String = "gemini-3.8-flash"
     ): Result<OnlineCandidate> = withContext(Dispatchers.IO) {
         if (apiKey.isBlank()) {
             return@withContext Result.failure(
@@ -283,7 +289,7 @@ class GeminiRepository(
                 put("generationConfig", genConfig)
             }
 
-            val endpoint = "$BASE_URL/$model:generateContent?key=${apiKey.trim()}"
+            val endpoint = "$BASE_URL/${resolveModel(model)}:generateContent?key=${apiKey.trim()}"
             val request = Request.Builder()
                 .url(endpoint)
                 .post(requestJson.toString().toRequestBody(JSON_MEDIA_TYPE))
