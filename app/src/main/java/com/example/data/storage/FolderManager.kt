@@ -24,11 +24,16 @@ class FolderManager(private val context: Context) {
 
     private val prefs = context.getSharedPreferences("sound_id_folders", Context.MODE_PRIVATE)
     private val keyFolders = "saved_tree_uris"
+    private val keyExcludedFolders = "excluded_folder_uris"
     private val cacheFile = File(context.filesDir, "sound_id_library_cache.json")
 
     fun getSavedFolderUris(): List<String> {
         val set = prefs.getStringSet(keyFolders, emptySet()) ?: emptySet()
         return set.toList()
+    }
+
+    fun getExcludedFolderUris(): Set<String> {
+        return prefs.getStringSet(keyExcludedFolders, emptySet()) ?: emptySet()
     }
 
     fun addFolderUri(treeUri: Uri): MusicFolder? {
@@ -47,17 +52,44 @@ class FolderManager(private val context: Context) {
         set.add(uriStr)
         prefs.edit().putStringSet(keyFolders, set).apply()
 
-        return MusicFolder(uriString = uriStr, displayName = folderName)
+        // Clean any exclusion for this tree if re-added
+        val excluded = getExcludedFolderUris().toMutableSet()
+        val toRemove = excluded.filter { it.startsWith(uriStr) || it == uriStr }
+        if (toRemove.isNotEmpty()) {
+            excluded.removeAll(toRemove.toSet())
+            prefs.edit().putStringSet(keyExcludedFolders, excluded).apply()
+        }
+
+        return MusicFolder(uriString = uriStr, displayName = folderName, treeUriString = uriStr)
     }
 
     fun removeFolder(uriString: String) {
         val set = prefs.getStringSet(keyFolders, emptySet())?.toMutableSet() ?: return
         set.remove(uriString)
         prefs.edit().putStringSet(keyFolders, set).apply()
+
+        // Also clean up excluded entries for this tree
+        val excluded = getExcludedFolderUris().toMutableSet()
+        val toRemove = excluded.filter { it.startsWith(uriString) || it == uriString }
+        if (toRemove.isNotEmpty()) {
+            excluded.removeAll(toRemove.toSet())
+            prefs.edit().putStringSet(keyExcludedFolders, excluded).apply()
+        }
+
         try {
             val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             context.contentResolver.releasePersistableUriPermission(Uri.parse(uriString), flags)
         } catch (ignored: Exception) {}
+    }
+
+    fun removeMusicFolder(folder: MusicFolder) {
+        if (folder.treeUriString == null || folder.treeUriString == folder.uriString) {
+            removeFolder(folder.uriString)
+        } else {
+            val excluded = getExcludedFolderUris().toMutableSet()
+            excluded.add(folder.uriString)
+            prefs.edit().putStringSet(keyExcludedFolders, excluded).apply()
+        }
     }
 
     // ==================== FAST CACHE ====================
@@ -80,7 +112,9 @@ class FolderManager(private val context: Context) {
                     MusicFolder(
                         uriString = fObj.getString("uri"),
                         displayName = fObj.getString("name"),
-                        trackCount = fObj.optInt("count", 0)
+                        trackCount = fObj.optInt("count", 0),
+                        treeUriString = fObj.optString("treeUri", "").ifEmpty { null },
+                        relativePath = fObj.optString("relativePath", "")
                     )
                 )
             }
@@ -134,6 +168,8 @@ class FolderManager(private val context: Context) {
                 fObj.put("uri", f.uriString)
                 fObj.put("name", f.displayName)
                 fObj.put("count", f.trackCount)
+                fObj.put("treeUri", f.treeUriString ?: "")
+                fObj.put("relativePath", f.relativePath)
                 foldersArr.put(fObj)
             }
             root.put("folders", foldersArr)
@@ -187,6 +223,7 @@ class FolderManager(private val context: Context) {
         val folderUris = getSavedFolderUris()
         val foldersList = mutableListOf<MusicFolder>()
         val allTracks = mutableListOf<AudioTrack>()
+        val excludedUris = getExcludedFolderUris()
 
         // Preload cached tracks into index map for instant O(1) cache hits
         val (_, cachedTracks) = loadCachedTracks()
@@ -197,19 +234,40 @@ class FolderManager(private val context: Context) {
                 val treeUri = Uri.parse(uriStr)
                 val treeDocId = DocumentsContract.getTreeDocumentId(treeUri)
                 val treeDoc = DocumentFile.fromTreeUri(context, treeUri)
-                val folderName = treeDoc?.name ?: "Carpeta de Música"
+                val rootFolderName = treeDoc?.name ?: "Carpeta de Música"
 
-                val tracksInFolder = mutableListOf<AudioTrack>()
-                scanDirectoryFast(treeUri, treeDocId, uriStr, tracksInFolder, cacheMap)
+                val treeFolders = mutableListOf<MusicFolder>()
+                val treeTracks = mutableListOf<AudioTrack>()
 
-                foldersList.add(
-                    MusicFolder(
-                        uriString = uriStr,
-                        displayName = folderName,
-                        trackCount = tracksInFolder.size
-                    )
+                scanDirectoryFast(
+                    treeUri = treeUri,
+                    parentDocumentId = treeDocId,
+                    dirName = rootFolderName,
+                    relativePath = "",
+                    treeUriString = uriStr,
+                    outTracks = treeTracks,
+                    outFolders = treeFolders,
+                    cacheMap = cacheMap,
+                    excludedUris = excludedUris
                 )
-                allTracks.addAll(tracksInFolder)
+
+                if (treeFolders.isEmpty()) {
+                    val rootUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocId).toString()
+                    if (!excludedUris.contains(rootUri)) {
+                        treeFolders.add(
+                            MusicFolder(
+                                uriString = rootUri,
+                                displayName = rootFolderName,
+                                trackCount = 0,
+                                treeUriString = uriStr,
+                                relativePath = ""
+                            )
+                        )
+                    }
+                }
+
+                foldersList.addAll(treeFolders)
+                allTracks.addAll(treeTracks)
             } catch (e: Exception) {
                 Log.e("FolderManager", "Error fast-scanning folder: $uriStr", e)
             }
@@ -224,10 +282,17 @@ class FolderManager(private val context: Context) {
     private suspend fun scanDirectoryFast(
         treeUri: Uri,
         parentDocumentId: String,
+        dirName: String,
+        relativePath: String,
         treeUriString: String,
         outTracks: MutableList<AudioTrack>,
-        cacheMap: Map<String, AudioTrack>
+        outFolders: MutableList<MusicFolder>,
+        cacheMap: Map<String, AudioTrack>,
+        excludedUris: Set<String>
     ) {
+        val parentFolderUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, parentDocumentId).toString()
+        val isExcluded = excludedUris.contains(parentFolderUri)
+
         val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocumentId)
 
         val projection = arrayOf(
@@ -238,7 +303,7 @@ class FolderManager(private val context: Context) {
             DocumentsContract.Document.COLUMN_LAST_MODIFIED
         )
 
-        val subDirs = mutableListOf<String>()
+        val subDirs = mutableListOf<Pair<String, String>>()
         val audioFiles = mutableListOf<AudioFileInfo>()
         val lrcNames = mutableSetOf<String>()
 
@@ -258,8 +323,8 @@ class FolderManager(private val context: Context) {
                     val lastMod = cursor.getLong(modIdx)
 
                     if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
-                        subDirs.add(docId)
-                    } else {
+                        subDirs.add(Pair(docId, name))
+                    } else if (!isExcluded) {
                         val lower = name.lowercase()
                         if (lower.endsWith(".mp3") || lower.endsWith(".m4a") || lower.endsWith(".mp4") || lower.endsWith(".aac")) {
                             val fileUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
@@ -275,64 +340,90 @@ class FolderManager(private val context: Context) {
             return
         }
 
-        val parentFolderUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, parentDocumentId).toString()
-        val toExtract = mutableListOf<AudioFileInfo>()
+        if (!isExcluded) {
+            val tracksInThisDir = mutableListOf<AudioTrack>()
+            val toExtract = mutableListOf<AudioFileInfo>()
 
-        // 1. Instant Cache evaluation (0 ms for unchanged files)
-        for (info in audioFiles) {
-            val uriKey = info.uri.toString()
-            val cached = cacheMap[uriKey]
-            val base = info.name.substringBeforeLast(".").lowercase()
-            val hasLrcFile = lrcNames.contains(base)
+            // 1. Instant Cache evaluation (0 ms for unchanged files)
+            for (info in audioFiles) {
+                val uriKey = info.uri.toString()
+                val cached = cacheMap[uriKey]
+                val base = info.name.substringBeforeLast(".").lowercase()
+                val hasLrcFile = lrcNames.contains(base)
 
-            if (cached != null && cached.sizeBytes == info.size && cached.dateModified == info.lastModified) {
-                outTracks.add(
-                    cached.copy(
-                        hasLyrics = cached.hasLyrics || hasLrcFile,
-                        parentFolderUri = parentFolderUri,
-                        treeUriString = treeUriString
+                if (cached != null && cached.sizeBytes == info.size && cached.dateModified == info.lastModified) {
+                    tracksInThisDir.add(
+                        cached.copy(
+                            hasLyrics = cached.hasLyrics || hasLrcFile,
+                            parentFolderUri = parentFolderUri,
+                            treeUriString = treeUriString
+                        )
                     )
-                )
-            } else {
-                toExtract.add(info)
-            }
-        }
-
-        // 2. Parallel Coroutine extraction for new / modified files (up to 16 concurrent workers)
-        if (toExtract.isNotEmpty()) {
-            val extracted = coroutineScope {
-                toExtract.chunked(16).flatMap { chunk ->
-                    chunk.map { info ->
-                        async(Dispatchers.IO) {
-                            try {
-                                val track = FastTagExtractor.extractQuickMetadata(
-                                    context = context,
-                                    uri = info.uri,
-                                    fileName = info.name,
-                                    fileSize = info.size,
-                                    lastModified = info.lastModified
-                                )
-                                val base = info.name.substringBeforeLast(".").lowercase()
-                                val hasLrcFile = lrcNames.contains(base)
-                                track.copy(
-                                    hasLyrics = track.hasLyrics || hasLrcFile,
-                                    parentFolderUri = parentFolderUri,
-                                    treeUriString = treeUriString
-                                )
-                            } catch (e: Exception) {
-                                Log.w("FolderManager", "Failed quick meta for ${info.name}", e)
-                                null
-                            }
-                        }
-                    }.awaitAll().filterNotNull()
+                } else {
+                    toExtract.add(info)
                 }
             }
-            outTracks.addAll(extracted)
+
+            // 2. Parallel Coroutine extraction for new / modified files (up to 16 concurrent workers)
+            if (toExtract.isNotEmpty()) {
+                val extracted = coroutineScope {
+                    toExtract.chunked(16).flatMap { chunk ->
+                        chunk.map { info ->
+                            async(Dispatchers.IO) {
+                                try {
+                                    val track = FastTagExtractor.extractQuickMetadata(
+                                        context = context,
+                                        uri = info.uri,
+                                        fileName = info.name,
+                                        fileSize = info.size,
+                                        lastModified = info.lastModified
+                                    )
+                                    val base = info.name.substringBeforeLast(".").lowercase()
+                                    val hasLrcFile = lrcNames.contains(base)
+                                    track.copy(
+                                        hasLyrics = track.hasLyrics || hasLrcFile,
+                                        parentFolderUri = parentFolderUri,
+                                        treeUriString = treeUriString
+                                    )
+                                } catch (e: Exception) {
+                                    Log.w("FolderManager", "Failed quick meta for ${info.name}", e)
+                                    null
+                                }
+                            }
+                        }.awaitAll().filterNotNull()
+                    }
+                }
+                tracksInThisDir.addAll(extracted)
+            }
+
+            if (tracksInThisDir.isNotEmpty()) {
+                outFolders.add(
+                    MusicFolder(
+                        uriString = parentFolderUri,
+                        displayName = dirName,
+                        trackCount = tracksInThisDir.size,
+                        treeUriString = treeUriString,
+                        relativePath = relativePath
+                    )
+                )
+                outTracks.addAll(tracksInThisDir)
+            }
         }
 
         // 3. Recurse into subdirectories
-        for (subDirId in subDirs) {
-            scanDirectoryFast(treeUri, subDirId, treeUriString, outTracks, cacheMap)
+        for ((subDirId, subDirName) in subDirs) {
+            val childRelative = if (relativePath.isEmpty()) subDirName else "$relativePath / $subDirName"
+            scanDirectoryFast(
+                treeUri = treeUri,
+                parentDocumentId = subDirId,
+                dirName = subDirName,
+                relativePath = childRelative,
+                treeUriString = treeUriString,
+                outTracks = outTracks,
+                outFolders = outFolders,
+                cacheMap = cacheMap,
+                excludedUris = excludedUris
+            )
         }
     }
 

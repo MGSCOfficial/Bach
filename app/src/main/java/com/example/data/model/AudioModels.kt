@@ -88,8 +88,16 @@ data class AudioTrack(
 data class MusicFolder(
     val uriString: String,
     val displayName: String,
-    val trackCount: Int = 0
+    val trackCount: Int = 0,
+    val treeUriString: String? = null,
+    val relativePath: String = ""
 )
+
+fun AudioTrack.belongsTo(folder: MusicFolder): Boolean {
+    return this.parentFolderUri == folder.uriString ||
+            (this.treeUriString == folder.uriString && this.parentFolderUri.isNullOrEmpty()) ||
+            (folder.treeUriString == this.treeUriString && folder.relativePath.isEmpty() && this.parentFolderUri.isNullOrEmpty())
+}
 
 data class LyricsResult(
     val trackName: String,
