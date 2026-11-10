@@ -18,11 +18,18 @@ enum class AccentColorPreset(val id: String, val displayName: String, val hexCol
     BLUE("blue", "Azul", 0xFF3B82F6)
 }
 
+enum class ViewLayoutMode {
+    LIST,
+    GRID
+}
+
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.DARK,
     val dynamicColor: Boolean = false,
     val accentPreset: AccentColorPreset = AccentColorPreset.EMERALD,
     val amoledDark: Boolean = false,
+    val songsLayoutMode: ViewLayoutMode = ViewLayoutMode.LIST,
+    val foldersLayoutMode: ViewLayoutMode = ViewLayoutMode.LIST,
 
     // Lyrics behavior
     val autoSearchLyrics: Boolean = true,
@@ -100,6 +107,10 @@ class SettingsManager(context: Context) {
         private const val KEY_GEMINI_ENABLED = "pref_gemini_enabled"
         private const val KEY_GEMINI_API_KEY = "pref_gemini_api_key"
         private const val KEY_GEMINI_MODEL = "pref_gemini_model"
+
+        // Layout Modes
+        private const val KEY_SONGS_LAYOUT_MODE = "pref_songs_layout_mode"
+        private const val KEY_FOLDERS_LAYOUT_MODE = "pref_folders_layout_mode"
     }
 
     fun loadSettings(): AppSettings {
@@ -161,6 +172,15 @@ class SettingsManager(context: Context) {
                     prefs.edit().putString(KEY_GEMINI_MODEL, migrated).apply()
                 }
                 migrated
+            },
+
+            songsLayoutMode = run {
+                val modeStr = prefs.getString(KEY_SONGS_LAYOUT_MODE, ViewLayoutMode.LIST.name) ?: ViewLayoutMode.LIST.name
+                try { ViewLayoutMode.valueOf(modeStr) } catch (e: Exception) { ViewLayoutMode.LIST }
+            },
+            foldersLayoutMode = run {
+                val modeStr = prefs.getString(KEY_FOLDERS_LAYOUT_MODE, ViewLayoutMode.LIST.name) ?: ViewLayoutMode.LIST.name
+                try { ViewLayoutMode.valueOf(modeStr) } catch (e: Exception) { ViewLayoutMode.LIST }
             }
         )
     }
@@ -236,5 +256,13 @@ class SettingsManager(context: Context) {
 
     fun setGeminiModel(model: String) {
         prefs.edit().putString(KEY_GEMINI_MODEL, model.trim()).apply()
+    }
+
+    fun setSongsLayoutMode(mode: ViewLayoutMode) {
+        prefs.edit().putString(KEY_SONGS_LAYOUT_MODE, mode.name).apply()
+    }
+
+    fun setFoldersLayoutMode(mode: ViewLayoutMode) {
+        prefs.edit().putString(KEY_FOLDERS_LAYOUT_MODE, mode.name).apply()
     }
 }

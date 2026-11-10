@@ -8,6 +8,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -33,7 +36,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.AudioTrack
 import com.example.data.model.MusicFolder
 import com.example.data.model.SortOrder
+import com.example.data.model.belongsTo
+import com.example.data.storage.ViewLayoutMode
+import com.example.ui.components.FolderGridCard
 import com.example.ui.components.TrackCard
+import com.example.ui.components.TrackGridCard
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.MusicViewModel
 
@@ -45,11 +52,13 @@ fun FoldersScreen(
     modifier: Modifier = Modifier
 ) {
     val libraryState by viewModel.libraryState.collectAsStateWithLifecycle()
+    val settingsState by viewModel.settings.collectAsStateWithLifecycle()
     val playerState by viewModel.audioPlayer.playerState.collectAsStateWithLifecycle()
     var selectedFolder by remember { mutableStateOf<MusicFolder?>(null) }
     var folderSearchQuery by remember { mutableStateOf("") }
     var folderSortOrder by remember { mutableStateOf(SortOrder.RECENTLY_MODIFIED) }
     var showFolderSortMenu by remember { mutableStateOf(false) }
+    var folderPendingRemoval by remember { mutableStateOf<MusicFolder?>(null) }
 
     val folderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -84,10 +93,7 @@ fun FoldersScreen(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            val count = libraryState.tracks.count {
-                                it.treeUriString == selectedFolder!!.uriString ||
-                                        (it.parentFolderUri != null && it.parentFolderUri!!.contains(selectedFolder!!.displayName, ignoreCase = true))
-                            }
+                            val count = libraryState.tracks.count { it.belongsTo(selectedFolder!!) }
                             Text(
                                 text = "$count canciones en esta carpeta",
                                 style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -119,6 +125,14 @@ fun FoldersScreen(
                 },
                 actions = {
                     if (selectedFolder == null) {
+                        val isFoldersGrid = settingsState.foldersLayoutMode == ViewLayoutMode.GRID
+                        IconButton(onClick = { viewModel.toggleFoldersLayoutMode() }) {
+                            Icon(
+                                imageVector = if (isFoldersGrid) Icons.Default.ViewList else Icons.Default.GridView,
+                                contentDescription = if (isFoldersGrid) "Ver carpetas como lista" else "Ver carpetas como cuadrícula",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         IconButton(onClick = { folderPickerLauncher.launch(null) }) {
                             Icon(
                                 imageVector = Icons.Default.CreateNewFolder,
@@ -131,6 +145,22 @@ fun FoldersScreen(
                                 imageVector = Icons.Default.Refresh,
                                 contentDescription = "Re-escanear",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        val isSongsGrid = settingsState.songsLayoutMode == ViewLayoutMode.GRID
+                        IconButton(onClick = { viewModel.toggleSongsLayoutMode() }) {
+                            Icon(
+                                imageVector = if (isSongsGrid) Icons.Default.ViewList else Icons.Default.GridView,
+                                contentDescription = if (isSongsGrid) "Ver canciones como lista" else "Ver canciones como cuadrícula",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(onClick = { folderPendingRemoval = selectedFolder }) {
+                            Icon(
+                                imageVector = Icons.Default.DeleteOutline,
+                                contentDescription = "Desvincular carpeta",
+                                tint = MaterialTheme.colorScheme.error
                             )
                         }
                     }
@@ -198,80 +228,130 @@ fun FoldersScreen(
                         }
                     }
                 } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        contentPadding = PaddingValues(vertical = 12.dp)
-                    ) {
-                        items(libraryState.folders, key = { it.uriString }) { folder ->
-                            val tracksInFolder = libraryState.tracks.count {
-                                it.treeUriString == folder.uriString ||
-                                        (it.parentFolderUri != null && it.parentFolderUri!!.contains(folder.displayName, ignoreCase = true))
-                            }
-
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
+                    val isFoldersGrid = settingsState.foldersLayoutMode == ViewLayoutMode.GRID
+                    if (isFoldersGrid) {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = PaddingValues(vertical = 12.dp)
+                        ) {
+                            items(libraryState.folders, key = { it.uriString }) { folder ->
+                                val tracksInFolder = libraryState.tracks.count { it.belongsTo(folder) }
+                                FolderGridCard(
+                                    folder = folder,
+                                    trackCount = tracksInFolder,
+                                    onFolderClick = {
                                         selectedFolder = folder
                                         folderSearchQuery = ""
                                     },
-                                shape = RoundedCornerShape(14.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                border = CardDefaults.outlinedCardBorder().copy(
-                                    brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                                    onDeleteClick = {
+                                        folderPendingRemoval = folder
+                                    }
                                 )
-                            ) {
-                                Row(
+                            }
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = PaddingValues(vertical = 12.dp)
+                        ) {
+                            items(libraryState.folders, key = { it.uriString }) { folder ->
+                                val tracksInFolder = libraryState.tracks.count { it.belongsTo(folder) }
+
+                                Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(44.dp)
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(LocalAccentColor.current.copy(alpha = 0.15f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Folder,
-                                            contentDescription = null,
-                                            tint = LocalAccentColor.current,
-                                            modifier = Modifier.size(26.dp)
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.width(14.dp))
-
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = folder.displayName,
-                                            style = MaterialTheme.typography.titleMedium.copy(
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            ),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text(
-                                            text = "$tracksInFolder canciones",
-                                            style = MaterialTheme.typography.bodySmall.copy(
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        )
-                                    }
-
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                        contentDescription = "Abrir carpeta",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(20.dp)
+                                        .clickable {
+                                            selectedFolder = folder
+                                            folderSearchQuery = ""
+                                        },
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                    border = CardDefaults.outlinedCardBorder().copy(
+                                        brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
                                     )
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(14.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(44.dp)
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(LocalAccentColor.current.copy(alpha = 0.15f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Folder,
+                                                contentDescription = null,
+                                                tint = LocalAccentColor.current,
+                                                modifier = Modifier.size(26.dp)
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.width(14.dp))
+
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = folder.displayName,
+                                                style = MaterialTheme.typography.titleMedium.copy(
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                ),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            if (folder.relativePath.isNotBlank() && folder.relativePath != folder.displayName) {
+                                                Spacer(modifier = Modifier.height(1.dp))
+                                                Text(
+                                                    text = folder.relativePath,
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    ),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = "$tracksInFolder canciones",
+                                                style = MaterialTheme.typography.bodySmall.copy(
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            )
+                                        }
+
+                                        IconButton(
+                                            onClick = { folderPendingRemoval = folder },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.DeleteOutline,
+                                                contentDescription = "Desvincular carpeta",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.width(4.dp))
+
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                            contentDescription = "Abrir carpeta",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -281,10 +361,7 @@ fun FoldersScreen(
                 // ==================== NIVEL 2: DRILL-DOWN EN LA CARPETA SELECCIONADA ====================
                 val currentFolder = selectedFolder!!
                 val folderTracks = remember(libraryState.tracks, currentFolder, folderSearchQuery, folderSortOrder) {
-                    val matching = libraryState.tracks.filter {
-                        it.treeUriString == currentFolder.uriString ||
-                                (it.parentFolderUri != null && it.parentFolderUri!!.contains(currentFolder.displayName, ignoreCase = true))
-                    }
+                    val matching = libraryState.tracks.filter { it.belongsTo(currentFolder) }
                     val filtered = if (folderSearchQuery.isBlank()) matching
                     else {
                         val q = folderSearchQuery.trim().lowercase()
@@ -454,32 +531,107 @@ fun FoldersScreen(
                             )
                         }
                     } else {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                            contentPadding = PaddingValues(bottom = 16.dp)
-                        ) {
-                            items(folderTracks, key = { it.id }) { track ->
-                                val isPlaying = playerState.isPlaying && playerState.activeTrackId == track.id
-                                TrackCard(
-                                    track = track,
-                                    isPlaying = isPlaying,
-                                    onTrackClick = { onTrackSelect(track) },
-                                    onPlayPauseClick = {
-                                        viewModel.audioPlayer.playTrack(
-                                            trackId = track.id,
-                                            uriString = track.fileUri,
-                                            durationMs = track.durationMs
-                                        )
-                                    }
-                                )
+                        val isSongsGrid = settingsState.songsLayoutMode == ViewLayoutMode.GRID
+                        if (isSongsGrid) {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(2),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                contentPadding = PaddingValues(bottom = 16.dp)
+                            ) {
+                                items(folderTracks, key = { it.id }) { track ->
+                                    val isPlaying = playerState.isPlaying && playerState.activeTrackId == track.id
+                                    TrackGridCard(
+                                        track = track,
+                                        isPlaying = isPlaying,
+                                        onTrackClick = { onTrackSelect(track) },
+                                        onPlayPauseClick = {
+                                            viewModel.audioPlayer.playTrack(
+                                                trackId = track.id,
+                                                uriString = track.fileUri,
+                                                durationMs = track.durationMs
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                contentPadding = PaddingValues(bottom = 16.dp)
+                            ) {
+                                items(folderTracks, key = { it.id }) { track ->
+                                    val isPlaying = playerState.isPlaying && playerState.activeTrackId == track.id
+                                    TrackCard(
+                                        track = track,
+                                        isPlaying = isPlaying,
+                                        onTrackClick = { onTrackSelect(track) },
+                                        onPlayPauseClick = {
+                                            viewModel.audioPlayer.playTrack(
+                                                trackId = track.id,
+                                                uriString = track.fileUri,
+                                                durationMs = track.durationMs
+                                            )
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
+        }
+
+        if (folderPendingRemoval != null) {
+            val folderToRemove = folderPendingRemoval!!
+            AlertDialog(
+                onDismissRequest = { folderPendingRemoval = null },
+                title = {
+                    Text(
+                        text = "¿Desvincular carpeta?",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                },
+                text = {
+                    Text(
+                        text = "Se desvinculará \"${folderToRemove.displayName}\" de tu biblioteca.\n\nTus archivos de música permanecerán seguros e intactos en el almacenamiento del dispositivo.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val toRemove = folderToRemove
+                            folderPendingRemoval = null
+                            if (selectedFolder?.uriString == toRemove.uriString) {
+                                selectedFolder = null
+                                folderSearchQuery = ""
+                            }
+                            viewModel.removeMusicFolder(toRemove)
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError
+                        ),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Desvincular", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { folderPendingRemoval = null }
+                    ) {
+                        Text("Cancelar")
+                    }
+                }
+            )
         }
     }
 }

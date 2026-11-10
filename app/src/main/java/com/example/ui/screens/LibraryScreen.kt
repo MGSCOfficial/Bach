@@ -11,6 +11,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -36,8 +39,10 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.AudioTrack
 import com.example.data.model.SortOrder
+import com.example.data.storage.ViewLayoutMode
 import com.example.ui.components.MiniPlayerBar
 import com.example.ui.components.TrackCard
+import com.example.ui.components.TrackGridCard
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.LibraryFilter
 import com.example.ui.viewmodel.MusicViewModel
@@ -50,6 +55,7 @@ fun LibraryScreen(
     modifier: Modifier = Modifier
 ) {
     val libraryState by viewModel.libraryState.collectAsStateWithLifecycle()
+    val settingsState by viewModel.settings.collectAsStateWithLifecycle()
     val playerState by viewModel.audioPlayer.playerState.collectAsStateWithLifecycle()
     var showSortMenu by remember { mutableStateOf(false) }
     var showFolderManagerSheet by remember { mutableStateOf(false) }
@@ -204,6 +210,26 @@ fun LibraryScreen(
                             }
                         }
                     }
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Toggle Grid / List view button
+                val isGrid = settingsState.songsLayoutMode == ViewLayoutMode.GRID
+                IconButton(
+                    onClick = { viewModel.toggleSongsLayoutMode() },
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                        .testTag("btn_toggle_songs_layout")
+                ) {
+                    Icon(
+                        imageVector = if (isGrid) Icons.Default.ViewList else Icons.Default.GridView,
+                        contentDescription = if (isGrid) "Ver como lista" else "Ver como cuadrícula",
+                        tint = LocalAccentColor.current,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
 
                 Spacer(modifier = Modifier.width(8.dp))
@@ -412,27 +438,55 @@ fun LibraryScreen(
                     }
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    contentPadding = PaddingValues(bottom = 24.dp)
-                ) {
-                    items(libraryState.filteredTracks, key = { it.id }) { track ->
-                        val isPlaying = playerState.isPlaying && playerState.activeTrackId == track.id
-                        TrackCard(
-                            track = track,
-                            isPlaying = isPlaying,
-                            onTrackClick = { onTrackSelect(track) },
-                            onPlayPauseClick = {
-                                viewModel.audioPlayer.playTrack(
-                                    trackId = track.id,
-                                    uriString = track.fileUri,
-                                    durationMs = track.durationMs
-                                )
-                            }
-                        )
+                if (settingsState.songsLayoutMode == ViewLayoutMode.GRID) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        contentPadding = PaddingValues(bottom = 24.dp)
+                    ) {
+                        items(libraryState.filteredTracks, key = { it.id }) { track ->
+                            val isPlaying = playerState.isPlaying && playerState.activeTrackId == track.id
+                            TrackGridCard(
+                                track = track,
+                                isPlaying = isPlaying,
+                                onTrackClick = { onTrackSelect(track) },
+                                onPlayPauseClick = {
+                                    viewModel.audioPlayer.playTrack(
+                                        trackId = track.id,
+                                        uriString = track.fileUri,
+                                        durationMs = track.durationMs
+                                    )
+                                }
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        contentPadding = PaddingValues(bottom = 24.dp)
+                    ) {
+                        items(libraryState.filteredTracks, key = { it.id }) { track ->
+                            val isPlaying = playerState.isPlaying && playerState.activeTrackId == track.id
+                            TrackCard(
+                                track = track,
+                                isPlaying = isPlaying,
+                                onTrackClick = { onTrackSelect(track) },
+                                onPlayPauseClick = {
+                                    viewModel.audioPlayer.playTrack(
+                                        trackId = track.id,
+                                        uriString = track.fileUri,
+                                        durationMs = track.durationMs
+                                    )
+                                }
+                            )
+                        }
                     }
                 }
             }

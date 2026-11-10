@@ -149,6 +149,28 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         _settings.update { it.copy(geminiModel = model) }
     }
 
+    fun toggleSongsLayoutMode() {
+        val current = _settings.value.songsLayoutMode
+        val newMode = if (current == com.example.data.storage.ViewLayoutMode.LIST) {
+            com.example.data.storage.ViewLayoutMode.GRID
+        } else {
+            com.example.data.storage.ViewLayoutMode.LIST
+        }
+        settingsManager.setSongsLayoutMode(newMode)
+        _settings.update { it.copy(songsLayoutMode = newMode) }
+    }
+
+    fun toggleFoldersLayoutMode() {
+        val current = _settings.value.foldersLayoutMode
+        val newMode = if (current == com.example.data.storage.ViewLayoutMode.LIST) {
+            com.example.data.storage.ViewLayoutMode.GRID
+        } else {
+            com.example.data.storage.ViewLayoutMode.LIST
+        }
+        settingsManager.setFoldersLayoutMode(newMode)
+        _settings.update { it.copy(foldersLayoutMode = newMode) }
+    }
+
     init {
         loadInitialLibrary()
     }
@@ -233,9 +255,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun removeMusicFolder(uriString: String) {
+    fun removeMusicFolder(folder: MusicFolder) {
         viewModelScope.launch {
-            folderManager.removeFolder(uriString)
+            folderManager.removeMusicFolder(folder)
             val (folders, tracks) = folderManager.scanFolders()
             _libraryState.update { state ->
                 state.copy(
@@ -247,8 +269,33 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                         state.searchQuery,
                         state.sortOrder
                     ),
-                    statusMessage = "Carpeta desvinculada."
+                    statusMessage = "Carpeta '${folder.displayName}' desvinculada."
                 )
+            }
+        }
+    }
+
+    fun removeMusicFolder(uriString: String) {
+        val folder = _libraryState.value.folders.find { it.uriString == uriString }
+        if (folder != null) {
+            removeMusicFolder(folder)
+        } else {
+            viewModelScope.launch {
+                folderManager.removeFolder(uriString)
+                val (folders, tracks) = folderManager.scanFolders()
+                _libraryState.update { state ->
+                    state.copy(
+                        folders = folders,
+                        tracks = tracks,
+                        filteredTracks = applyFilterSearchAndSort(
+                            tracks,
+                            state.activeFilter,
+                            state.searchQuery,
+                            state.sortOrder
+                        ),
+                        statusMessage = "Carpeta desvinculada."
+                    )
+                }
             }
         }
     }

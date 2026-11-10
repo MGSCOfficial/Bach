@@ -14,8 +14,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
@@ -41,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.model.AudioFormat
 import com.example.data.model.AudioTrack
+import com.example.data.model.MusicFolder
 import com.example.player.PlayerState
 import com.example.ui.theme.*
 import com.example.ui.util.AudioThumbnailLoader
@@ -246,6 +249,242 @@ fun TrackCard(
                     modifier = Modifier.size(22.dp)
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun TrackGridCard(
+    track: AudioTrack,
+    isPlaying: Boolean,
+    onTrackClick: () -> Unit,
+    onPlayPauseClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val accent = LocalAccentColor.current
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("track_grid_card_${track.id}")
+            .clickable(onClick = onTrackClick),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        border = CardDefaults.outlinedCardBorder().copy(
+            brush = Brush.verticalGradient(
+                listOf(
+                    if (isPlaying) accent.copy(alpha = 0.8f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                )
+            )
+        )
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Square Cover Art with Floating Badge & Play Overlay
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                AudioCoverThumbnail(
+                    track = track,
+                    modifier = Modifier.fillMaxSize(),
+                    placeholderIconSize = 42.dp
+                )
+
+                // Format badge overlay (Top-Start)
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp),
+                    shape = RoundedCornerShape(4.dp),
+                    color = if (track.format == AudioFormat.MP3) EmeraldDark.copy(alpha = 0.9f) else VioletDark.copy(alpha = 0.9f)
+                ) {
+                    Text(
+                        text = track.format.name,
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
+
+                // Play / Pause Circle Button (Bottom-End)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp)
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.65f))
+                        .clickable(onClick = onPlayPauseClick),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (isPlaying) "Pausar" else "Reproducir",
+                        tint = if (isPlaying) accent else Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            // Info Details
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = track.displayTitle,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                Text(
+                    text = track.displayArtist,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = track.formattedDuration,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+
+                    if (track.hasLyrics) {
+                        Surface(
+                            shape = RoundedCornerShape(3.dp),
+                            color = CyanAccent.copy(alpha = 0.2f)
+                        ) {
+                            Text(
+                                text = "LRC",
+                                color = CyanAccent,
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FolderGridCard(
+    folder: MusicFolder,
+    trackCount: Int,
+    onFolderClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val accent = LocalAccentColor.current
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("folder_grid_card_${folder.uriString}")
+            .clickable(onClick = onFolderClick),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        border = CardDefaults.outlinedCardBorder().copy(
+            brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(accent.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Folder,
+                        contentDescription = null,
+                        tint = accent,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                IconButton(
+                    onClick = onDeleteClick,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteOutline,
+                        contentDescription = "Desvincular carpeta",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = folder.displayName,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            if (folder.relativePath.isNotBlank() && folder.relativePath != folder.displayName) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = folder.relativePath,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = "$trackCount canciones",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            )
         }
     }
 }
