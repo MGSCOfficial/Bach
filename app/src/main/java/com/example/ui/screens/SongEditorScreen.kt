@@ -841,7 +841,8 @@ fun SongEditorScreen(
             isLoading = editorState.isLoadingCovers,
             onSelectOption = { opt -> viewModel.selectCoverOption(opt) },
             onCustomImagePicked = { bytes -> viewModel.setCustomCoverFromBytes(bytes) },
-            onDismiss = { viewModel.hideCoverPickerSheet() }
+            onDismiss = { viewModel.hideCoverPickerSheet() },
+            isAmoled = isAmoled
         )
     }
 

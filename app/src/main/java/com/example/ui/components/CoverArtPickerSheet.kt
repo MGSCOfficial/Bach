@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,7 +20,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -46,9 +46,15 @@ fun CoverArtPickerSheet(
     isLoading: Boolean,
     onSelectOption: (CoverArtOption) -> Unit,
     onCustomImagePicked: (ByteArray) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    isAmoled: Boolean = false
 ) {
     val context = LocalContext.current
+    val accent = LocalAccentColor.current
+    val sheetBg = if (isAmoled) AmoledDarkBg else MaterialTheme.colorScheme.surface
+    val cardBg = if (isAmoled) AmoledCardSurface else MaterialTheme.colorScheme.surfaceVariant
+    val cardBorder = if (isAmoled) AmoledBorder else MaterialTheme.colorScheme.outlineVariant
+    val imagePlaceholderBg = if (isAmoled) AmoledCardSurfaceVariant else MaterialTheme.colorScheme.surface
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -67,8 +73,8 @@ fun CoverArtPickerSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = StudioDarkBg,
-        tonalElevation = 16.dp,
+        containerColor = sheetBg,
+        tonalElevation = if (isAmoled) 0.dp else 16.dp,
         modifier = Modifier.testTag("cover_picker_sheet")
     ) {
         Column(
@@ -88,17 +94,17 @@ fun CoverArtPickerSheet(
                         text = "Elige la Carátula",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
-                            color = StudioTextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     )
                     Text(
                         text = "Cover Art Archive • iTunes • Deezer • Galería",
-                        style = MaterialTheme.typography.bodySmall.copy(color = StudioTextSecondary)
+                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                     )
                 }
 
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = StudioTextSecondary)
+                    Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
@@ -116,13 +122,14 @@ fun CoverArtPickerSheet(
                     .testTag("pick_gallery_image_button"),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = EmeraldAccent
+                    contentColor = accent,
+                    containerColor = accent.copy(alpha = 0.08f)
                 ),
-                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(EmeraldAccent))
+                border = BorderStroke(1.dp, accent)
             ) {
-                Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(20.dp))
+                Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Seleccionar imagen desde el dispositivo", fontWeight = FontWeight.SemiBold)
+                Text("Seleccionar imagen desde el dispositivo", fontWeight = FontWeight.SemiBold, color = accent)
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -135,9 +142,9 @@ fun CoverArtPickerSheet(
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(color = EmeraldAccent)
+                        CircularProgressIndicator(color = accent)
                         Spacer(modifier = Modifier.height(12.dp))
-                        Text("Buscando portadas en alta resolución...", color = StudioTextSecondary)
+                        Text("Buscando portadas en alta resolución...", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             } else if (options.isEmpty()) {
@@ -149,7 +156,7 @@ fun CoverArtPickerSheet(
                 ) {
                     Text(
                         text = "No hay carátulas disponibles en línea. Puedes cargar una imagen desde tu dispositivo.",
-                        color = StudioTextMuted,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 14.sp
                     )
                 }
@@ -167,6 +174,10 @@ fun CoverArtPickerSheet(
                         CoverCard(
                             option = option,
                             isSelected = isSelected,
+                            accent = accent,
+                            cardBg = cardBg,
+                            cardBorder = cardBorder,
+                            imagePlaceholderBg = imagePlaceholderBg,
                             onSelect = { onSelectOption(option) }
                         )
                     }
@@ -180,6 +191,10 @@ fun CoverArtPickerSheet(
 fun CoverCard(
     option: CoverArtOption,
     isSelected: Boolean,
+    accent: Color,
+    cardBg: Color,
+    cardBorder: Color,
+    imagePlaceholderBg: Color,
     onSelect: () -> Unit
 ) {
     Card(
@@ -188,18 +203,18 @@ fun CoverCard(
             .clickable(onClick = onSelect)
             .border(
                 width = if (isSelected) 3.dp else 1.dp,
-                color = if (isSelected) EmeraldAccent else StudioBorder,
+                color = if (isSelected) accent else cardBorder,
                 shape = RoundedCornerShape(14.dp)
             ),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = StudioCardSurface)
+        colors = CardDefaults.cardColors(containerColor = cardBg)
     ) {
         Column {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
-                    .background(StudioCardSurfaceVariant)
+                    .background(imagePlaceholderBg)
             ) {
                 if (option.bytes != null) {
                     val bitmap = remember(option.bytes) {
@@ -233,7 +248,7 @@ fun CoverCard(
                             .align(Alignment.TopEnd)
                             .padding(8.dp)
                             .size(28.dp)
-                            .background(EmeraldAccent, CircleShape),
+                            .background(accent, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -270,13 +285,13 @@ fun CoverCard(
                     text = option.label,
                     style = MaterialTheme.typography.bodySmall.copy(
                         fontWeight = FontWeight.SemiBold,
-                        color = StudioTextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     ),
                     maxLines = 1
                 )
                 Text(
                     text = option.source,
-                    style = MaterialTheme.typography.labelSmall.copy(color = StudioTextSecondary),
+                    style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                     maxLines = 1
                 )
             }
