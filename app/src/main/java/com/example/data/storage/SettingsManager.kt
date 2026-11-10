@@ -63,7 +63,7 @@ data class AppSettings(
     // Google Gemini AI
     val geminiEnabled: Boolean = false,
     val geminiApiKey: String = "",
-    val geminiModel: String = "gemini-3.8-flash"
+    val geminiModel: String = "gemini-3.5-flash-lite"
 )
 
 class SettingsManager(context: Context) {
@@ -162,10 +162,10 @@ class SettingsManager(context: Context) {
             geminiEnabled = prefs.getBoolean(KEY_GEMINI_ENABLED, false),
             geminiApiKey = prefs.getString(KEY_GEMINI_API_KEY, "") ?: "",
             geminiModel = run {
-                val rawModel = prefs.getString(KEY_GEMINI_MODEL, "gemini-3.8-flash") ?: "gemini-3.8-flash"
+                val rawModel = prefs.getString(KEY_GEMINI_MODEL, "gemini-3.5-flash-lite") ?: "gemini-3.5-flash-lite"
                 val migrated = when (rawModel) {
-                    "gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash" -> "gemini-3.8-flash"
-                    "gemini-2.5-pro", "gemini-1.5-pro" -> "gemini-3.8-pro"
+                    "gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-3.8-flash" -> "gemini-3.5-flash-lite"
+                    "gemini-2.5-pro", "gemini-1.5-pro", "gemini-3.8-pro" -> "gemini-3.5-flash"
                     else -> rawModel
                 }
                 if (migrated != rawModel) {

@@ -1,11 +1,14 @@
 package com.example.data.remote
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.util.Base64
 import android.util.Log
 import com.example.data.model.LyricsResult
 import com.example.data.model.MetadataSource
 import com.example.data.model.OnlineCandidate
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -13,13 +16,15 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 
 class GeminiRepository(
     private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(45, TimeUnit.SECONDS)
+        .writeTimeout(45, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
         .followRedirects(true)
         .build()
 ) {
@@ -28,17 +33,126 @@ class GeminiRepository(
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
+        val FALLBACK_MODELS = listOf(
+            "gemini-3.5-flash-lite",
+            "gemini-flash-lite-latest",
+            "gemini-3.5-flash"
+        )
+
         fun resolveModel(model: String): String = when (model.trim()) {
-            "gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash" -> "gemini-3.8-flash"
-            "gemini-2.5-pro", "gemini-1.5-pro" -> "gemini-3.8-pro"
-            else -> model.trim().ifBlank { "gemini-3.8-flash" }
+            "gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-3.8-flash" -> "gemini-3.5-flash-lite"
+            "gemini-2.5-pro", "gemini-1.5-pro", "gemini-3.8-pro" -> "gemini-3.5-flash"
+            else -> model.trim().ifBlank { "gemini-3.5-flash-lite" }
         }
+    }
+
+    private fun optimizeImageForVision(rawBytes: ByteArray, maxDimension: Int = 512): ByteArray {
+        return try {
+            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, options)
+
+            var inSampleSize = 1
+            val maxSide = maxOf(options.outWidth, options.outHeight)
+            while (maxSide / (inSampleSize * 2) >= maxDimension) {
+                inSampleSize *= 2
+            }
+
+            val decodeOptions = BitmapFactory.Options().apply {
+                this.inSampleSize = inSampleSize
+                inPreferredConfig = Bitmap.Config.RGB_565
+            }
+            val bitmap = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, decodeOptions) ?: return rawBytes
+
+            val width = bitmap.width
+            val height = bitmap.height
+            val scaledBitmap = if (width > maxDimension || height > maxDimension) {
+                val ratio = minOf(maxDimension.toFloat() / width, maxDimension.toFloat() / height)
+                val newWidth = (width * ratio).toInt()
+                val newHeight = (height * ratio).toInt()
+                Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+            } else {
+                bitmap
+            }
+
+            val out = ByteArrayOutputStream()
+            scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 80, out)
+            if (scaledBitmap != bitmap) bitmap.recycle()
+            scaledBitmap.recycle()
+            out.toByteArray()
+        } catch (e: Exception) {
+            Log.w(TAG, "Image optimization failed, using original bytes", e)
+            rawBytes
+        }
+    }
+
+    private suspend fun executeWithModelCascade(
+        preferredModel: String,
+        apiKey: String,
+        buildRequestBody: () -> String
+    ): Pair<String, String> {
+        val targetModels = mutableListOf<String>()
+        val primary = resolveModel(preferredModel)
+        targetModels.add(primary)
+        for (fb in FALLBACK_MODELS) {
+            if (fb != primary && !targetModels.contains(fb)) {
+                targetModels.add(fb)
+            }
+        }
+
+        var lastErrorMsg = "No se pudo conectar con el servicio de Gemini."
+
+        for (modelName in targetModels) {
+            val endpoint = "$BASE_URL/$modelName:generateContent?key=${apiKey.trim()}"
+            val requestBodyStr = buildRequestBody()
+            val request = Request.Builder()
+                .url(endpoint)
+                .post(requestBodyStr.toRequestBody(JSON_MEDIA_TYPE))
+                .build()
+
+            for (attempt in 1..2) {
+                try {
+                    val response = client.newCall(request).execute()
+                    val responseBody = response.body?.string().orEmpty()
+
+                    if (response.isSuccessful) {
+                        return Pair(responseBody, modelName)
+                    }
+
+                    val code = response.code
+                    lastErrorMsg = parseErrorMessage(code, responseBody)
+                    Log.w(TAG, "[$modelName] attempt $attempt returned HTTP $code: $lastErrorMsg")
+
+                    if (code == 503 || code == 429) {
+                        if (attempt == 1) {
+                            delay(1200)
+                            continue
+                        }
+                    } else if (code == 404) {
+                        break
+                    } else if (code == 403 || code == 400) {
+                        throw Exception(lastErrorMsg)
+                    }
+                } catch (e: Exception) {
+                    if (e.message?.contains("403") == true || e.message?.contains("400") == true) {
+                        throw e
+                    }
+                    Log.w(TAG, "[$modelName] attempt $attempt threw exception: ${e.message}")
+                    lastErrorMsg = e.message ?: "Error de red con Gemini"
+                    if (attempt == 1) {
+                        delay(1000)
+                    }
+                }
+            }
+            Log.i(TAG, "Cascading from $modelName to next available model...")
+        }
+
+        throw Exception(lastErrorMsg)
     }
 
     suspend fun analyzeCoverImage(
         coverBytes: ByteArray,
         apiKey: String,
-        model: String = "gemini-3.8-flash",
+        model: String = "gemini-3.5-flash-lite",
         hintTitle: String = "",
         hintArtist: String = ""
     ): Result<OnlineCandidate> = withContext(Dispatchers.IO) {
@@ -68,46 +182,35 @@ class GeminiRepository(
         }
 
         try {
-            val base64Image = Base64.encodeToString(coverBytes, Base64.NO_WRAP)
+            val optimizedBytes = optimizeImageForVision(coverBytes, maxDimension = 512)
+            val base64Image = Base64.encodeToString(optimizedBytes, Base64.NO_WRAP)
 
-            val requestJson = JSONObject().apply {
-                val contentsArray = JSONArray().apply {
-                    val contentObj = JSONObject().apply {
-                        val partsArray = JSONArray().apply {
-                            put(JSONObject().apply { put("text", prompt) })
-                            put(JSONObject().apply {
-                                put("inlineData", JSONObject().apply {
-                                    put("mimeType", "image/jpeg")
-                                    put("data", base64Image)
+            val (responseBody, _) = executeWithModelCascade(model, apiKey) {
+                val requestJson = JSONObject().apply {
+                    val contentsArray = JSONArray().apply {
+                        val contentObj = JSONObject().apply {
+                            val partsArray = JSONArray().apply {
+                                put(JSONObject().apply { put("text", prompt) })
+                                put(JSONObject().apply {
+                                    put("inlineData", JSONObject().apply {
+                                        put("mimeType", "image/jpeg")
+                                        put("data", base64Image)
+                                    })
                                 })
-                            })
+                            }
+                            put("parts", partsArray)
                         }
-                        put("parts", partsArray)
+                        put(contentObj)
                     }
-                    put(contentObj)
+                    put("contents", contentsArray)
+
+                    val genConfig = JSONObject().apply {
+                        put("temperature", 0.1)
+                        put("responseMimeType", "application/json")
+                    }
+                    put("generationConfig", genConfig)
                 }
-                put("contents", contentsArray)
-
-                val genConfig = JSONObject().apply {
-                    put("temperature", 0.1)
-                    put("responseMimeType", "application/json")
-                }
-                put("generationConfig", genConfig)
-            }
-
-            val endpoint = "$BASE_URL/${resolveModel(model)}:generateContent?key=${apiKey.trim()}"
-            val request = Request.Builder()
-                .url(endpoint)
-                .post(requestJson.toString().toRequestBody(JSON_MEDIA_TYPE))
-                .build()
-
-            val response = client.newCall(request).execute()
-            val responseBody = response.body?.string().orEmpty()
-
-            if (!response.isSuccessful) {
-                val errorMsg = parseErrorMessage(response.code, responseBody)
-                Log.w(TAG, "Gemini vision failed: HTTP ${response.code} -> $errorMsg")
-                return@withContext Result.failure(Exception(errorMsg))
+                requestJson.toString()
             }
 
             val textOutput = extractCandidateText(responseBody)
@@ -146,7 +249,7 @@ class GeminiRepository(
         artist: String,
         album: String = "",
         apiKey: String,
-        model: String = "gemini-3.8-flash"
+        model: String = "gemini-3.5-flash-lite"
     ): Result<LyricsResult> = withContext(Dispatchers.IO) {
         if (apiKey.isBlank()) {
             return@withContext Result.failure(
@@ -173,37 +276,25 @@ class GeminiRepository(
         }
 
         try {
-            val requestJson = JSONObject().apply {
-                val contentsArray = JSONArray().apply {
-                    val contentObj = JSONObject().apply {
-                        val partsArray = JSONArray().apply {
-                            put(JSONObject().apply { put("text", prompt) })
+            val (responseBody, usedModel) = executeWithModelCascade(model, apiKey) {
+                val requestJson = JSONObject().apply {
+                    val contentsArray = JSONArray().apply {
+                        val contentObj = JSONObject().apply {
+                            val partsArray = JSONArray().apply {
+                                put(JSONObject().apply { put("text", prompt) })
+                            }
+                            put("parts", partsArray)
                         }
-                        put("parts", partsArray)
+                        put(contentObj)
                     }
-                    put(contentObj)
+                    put("contents", contentsArray)
+
+                    val genConfig = JSONObject().apply {
+                        put("temperature", 0.2)
+                    }
+                    put("generationConfig", genConfig)
                 }
-                put("contents", contentsArray)
-
-                val genConfig = JSONObject().apply {
-                    put("temperature", 0.2)
-                }
-                put("generationConfig", genConfig)
-            }
-
-            val endpoint = "$BASE_URL/${resolveModel(model)}:generateContent?key=${apiKey.trim()}"
-            val request = Request.Builder()
-                .url(endpoint)
-                .post(requestJson.toString().toRequestBody(JSON_MEDIA_TYPE))
-                .build()
-
-            val response = client.newCall(request).execute()
-            val responseBody = response.body?.string().orEmpty()
-
-            if (!response.isSuccessful) {
-                val errorMsg = parseErrorMessage(response.code, responseBody)
-                Log.w(TAG, "Gemini lyrics failed: HTTP ${response.code} -> $errorMsg")
-                return@withContext Result.failure(Exception(errorMsg))
+                requestJson.toString()
             }
 
             val rawText = extractCandidateText(responseBody)
@@ -223,7 +314,7 @@ class GeminiRepository(
                     artistName = artist,
                     plainLyrics = null,
                     syncedLyrics = cleanedText,
-                    source = "Google Gemini ($model)"
+                    source = "Google Gemini ($usedModel)"
                 )
             } else {
                 LyricsResult(
@@ -231,7 +322,7 @@ class GeminiRepository(
                     artistName = artist,
                     plainLyrics = cleanedText,
                     syncedLyrics = null,
-                    source = "Google Gemini ($model)"
+                    source = "Google Gemini ($usedModel)"
                 )
             }
 
@@ -246,7 +337,7 @@ class GeminiRepository(
         fileName: String,
         existingTags: Map<String, String>,
         apiKey: String,
-        model: String = "gemini-3.8-flash"
+        model: String = "gemini-3.5-flash-lite"
     ): Result<OnlineCandidate> = withContext(Dispatchers.IO) {
         if (apiKey.isBlank()) {
             return@withContext Result.failure(
@@ -270,38 +361,26 @@ class GeminiRepository(
         }
 
         try {
-            val requestJson = JSONObject().apply {
-                val contentsArray = JSONArray().apply {
-                    val contentObj = JSONObject().apply {
-                        val partsArray = JSONArray().apply {
-                            put(JSONObject().apply { put("text", prompt) })
+            val (responseBody, _) = executeWithModelCascade(model, apiKey) {
+                val requestJson = JSONObject().apply {
+                    val contentsArray = JSONArray().apply {
+                        val contentObj = JSONObject().apply {
+                            val partsArray = JSONArray().apply {
+                                put(JSONObject().apply { put("text", prompt) })
+                            }
+                            put("parts", partsArray)
                         }
-                        put("parts", partsArray)
+                        put(contentObj)
                     }
-                    put(contentObj)
+                    put("contents", contentsArray)
+
+                    val genConfig = JSONObject().apply {
+                        put("temperature", 0.1)
+                        put("responseMimeType", "application/json")
+                    }
+                    put("generationConfig", genConfig)
                 }
-                put("contents", contentsArray)
-
-                val genConfig = JSONObject().apply {
-                    put("temperature", 0.1)
-                    put("responseMimeType", "application/json")
-                }
-                put("generationConfig", genConfig)
-            }
-
-            val endpoint = "$BASE_URL/${resolveModel(model)}:generateContent?key=${apiKey.trim()}"
-            val request = Request.Builder()
-                .url(endpoint)
-                .post(requestJson.toString().toRequestBody(JSON_MEDIA_TYPE))
-                .build()
-
-            val response = client.newCall(request).execute()
-            val responseBody = response.body?.string().orEmpty()
-
-            if (!response.isSuccessful) {
-                val errorMsg = parseErrorMessage(response.code, responseBody)
-                Log.w(TAG, "Gemini text disambiguation failed: HTTP ${response.code} -> $errorMsg")
-                return@withContext Result.failure(Exception(errorMsg))
+                requestJson.toString()
             }
 
             val textOutput = extractCandidateText(responseBody)
