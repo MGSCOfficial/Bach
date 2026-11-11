@@ -557,63 +557,75 @@ fun SongEditorScreen(
                             )
                         }
 
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        if (draft.lyrics.isNotBlank()) {
+                            TextButton(
+                                onClick = { viewModel.clearLyrics() },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.testTag("btn_clear_lyrics")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DeleteOutline,
+                                    contentDescription = "Borrar Letra",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Borrar Letra",
+                                    color = MaterialTheme.colorScheme.error,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Filas de acciones líricas: LRCLIB y Gemini equilibrados al 50%
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { viewModel.searchLyricsForCurrentTrack() },
+                            enabled = !editorState.isSearchingLyrics && !editorState.isGeminiLoading,
+                            colors = ButtonDefaults.buttonColors(containerColor = accent),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("btn_search_lyrics"),
+                            contentPadding = PaddingValues(vertical = 6.dp)
                         ) {
-                            Button(
-                                onClick = { viewModel.searchLyricsForCurrentTrack() },
-                                enabled = !editorState.isSearchingLyrics && !editorState.isGeminiLoading,
-                                colors = ButtonDefaults.buttonColors(containerColor = accent),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                modifier = Modifier.testTag("btn_search_lyrics")
-                            ) {
-                                if (editorState.isSearchingLyrics) {
-                                    CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Buscando...", color = Color.Black, fontSize = 11.sp)
-                                } else {
-                                    Icon(Icons.Default.Search, contentDescription = null, tint = Color.Black, modifier = Modifier.size(14.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("LRCLIB", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                }
+                            if (editorState.isSearchingLyrics) {
+                                CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Buscando...", color = Color.Black, fontSize = 12.sp)
+                            } else {
+                                Icon(Icons.Default.Search, contentDescription = null, tint = Color.Black, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Buscar en LRCLIB", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
+                        }
 
-                            Button(
-                                onClick = { viewModel.fetchLyricsWithGemini(context) },
-                                enabled = !editorState.isGeminiLoading && !editorState.isSearchingLyrics,
-                                colors = ButtonDefaults.buttonColors(containerColor = VioletAccent),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                modifier = Modifier.testTag("btn_gemini_lyrics")
-                            ) {
-                                if (editorState.isGeminiLoading) {
-                                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Gemini...", color = Color.White, fontSize = 11.sp)
-                                } else {
-                                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Gemini", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                }
-                            }
-
-                            if (draft.lyrics.isNotBlank()) {
-                                OutlinedButton(
-                                    onClick = { viewModel.clearLyrics() },
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                    modifier = Modifier.testTag("btn_clear_lyrics")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.DeleteOutline,
-                                        contentDescription = "Borrar Letra",
-                                        tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Borrar", color = MaterialTheme.colorScheme.error, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                }
+                        Button(
+                            onClick = { viewModel.fetchLyricsWithGemini(context) },
+                            enabled = !editorState.isGeminiLoading && !editorState.isSearchingLyrics,
+                            colors = ButtonDefaults.buttonColors(containerColor = VioletAccent),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("btn_gemini_lyrics"),
+                            contentPadding = PaddingValues(vertical = 6.dp)
+                        ) {
+                            if (editorState.isGeminiLoading) {
+                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Gemini...", color = Color.White, fontSize = 12.sp)
+                            } else {
+                                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Generar con Gemini", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
                         }
                     }

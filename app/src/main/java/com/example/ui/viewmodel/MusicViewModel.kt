@@ -604,7 +604,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val title = draft.title.ifBlank { draft.fileName.substringBeforeLast(".") }
 
         viewModelScope.launch {
-            _editorState.update { it.copy(isSearchingLyrics = true) }
+            _editorState.update {
+                it.copy(
+                    isSearchingLyrics = true,
+                    showLyricsPickerSheet = true,
+                    lyricsCandidates = emptyList()
+                )
+            }
             val candidates = lyricsRepo.searchAllLyrics(
                 trackName = title,
                 artistName = draft.artist,
@@ -615,7 +621,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 state.copy(
                     isSearchingLyrics = false,
                     lyricsCandidates = candidates,
-                    showLyricsPickerSheet = candidates.isNotEmpty(),
+                    showLyricsPickerSheet = true,
                     saveNotification = if (candidates.isEmpty()) "No se encontraron letras en LRCLIB para '$title'" else null
                 )
             }

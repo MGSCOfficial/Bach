@@ -147,6 +147,49 @@ class LyricsRepository {
             Log.e("LyricsRepository", "Error buscando candidatos de letra en LRCLIB", e)
         }
 
+        // 3. Fallback con artista principal si es colaboración y no hubo resultados
+        if (candidates.isEmpty() && artistName.isNotBlank() && trackName.isNotBlank()) {
+            val primaryArtist = artistName.split(",", "&", "feat.", "ft.", ";", "•", "x", "X").first().trim()
+            if (primaryArtist.isNotBlank() && !primaryArtist.equals(artistName, ignoreCase = true)) {
+                try {
+                    val query2 = "$primaryArtist $trackName"
+                    val encodedQuery2 = URLEncoder.encode(query2, "UTF-8")
+                    val url2 = "https://lrclib.net/api/search?q=$encodedQuery2"
+                    val request2 = Request.Builder().url(url2).header("User-Agent", userAgent).build()
+                    client.newCall(request2).execute().use { response ->
+                        if (response.isSuccessful) {
+                            response.body?.string()?.let { b ->
+                                val arr = JSONArray(b)
+                                for (i in 0 until minOf(arr.length(), 15)) {
+                                    val item = arr.getJSONObject(i)
+                                    val plain = optCleanLyrics(item, "plainLyrics")
+                                    val synced = optCleanLyrics(item, "syncedLyrics")
+                                    if (!plain.isNullOrBlank() || !synced.isNullOrBlank()) {
+                                        val tName = item.optString("trackName", trackName)
+                                        val aName = item.optString("artistName", primaryArtist)
+                                        val albName = item.optString("albumName", "")
+                                        val srcLabel = if (albName.isNotBlank()) "LRCLIB • $albName" else "LRCLIB"
+                                        val res = LyricsResult(
+                                            trackName = tName,
+                                            artistName = aName,
+                                            plainLyrics = plain,
+                                            syncedLyrics = synced,
+                                            source = srcLabel
+                                        )
+                                        if (candidates.none { it.bestLyrics.trim() == res.bestLyrics.trim() }) {
+                                            candidates.add(res)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("LyricsRepository", "Error en fallback con artista principal en LRCLIB", e)
+                }
+            }
+        }
+
         candidates
     }
 
