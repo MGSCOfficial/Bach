@@ -65,6 +65,91 @@ class LyricsRepository {
         return@withContext null
     }
 
+    suspend fun searchAllLyrics(
+        trackName: String,
+        artistName: String,
+        albumName: String? = null
+    ): List<LyricsResult> = withContext(Dispatchers.IO) {
+        val candidates = mutableListOf<LyricsResult>()
+        if (trackName.isBlank() && artistName.isBlank()) return@withContext emptyList()
+
+        // 1. Exact match attempt with LRCLIB /api/get
+        if (trackName.isNotBlank() && artistName.isNotBlank()) {
+            try {
+                val encodedTrack = URLEncoder.encode(trackName, "UTF-8")
+                val encodedArtist = URLEncoder.encode(artistName, "UTF-8")
+                val url = StringBuilder("https://lrclib.net/api/get?track_name=$encodedTrack&artist_name=$encodedArtist").apply {
+                    if (!albumName.isNullOrBlank()) append("&album_name=").append(URLEncoder.encode(albumName, "UTF-8"))
+                }.toString()
+
+                val request = Request.Builder().url(url).header("User-Agent", userAgent).build()
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        response.body?.string()?.let { b ->
+                            val obj = JSONObject(b)
+                            val plain = optCleanLyrics(obj, "plainLyrics")
+                            val synced = optCleanLyrics(obj, "syncedLyrics")
+                            if (!plain.isNullOrBlank() || !synced.isNullOrBlank()) {
+                                candidates.add(
+                                    LyricsResult(
+                                        trackName = obj.optString("trackName", trackName),
+                                        artistName = obj.optString("artistName", artistName),
+                                        plainLyrics = plain,
+                                        syncedLyrics = synced,
+                                        source = "LRCLIB (Coincidencia Exacta)"
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w("LyricsRepository", "Error en /api/get exacto de LRCLIB", e)
+            }
+        }
+
+        // 2. Broad search query via LRCLIB /api/search?q=...
+        try {
+            val query = listOf(artistName, trackName).filter { it.isNotBlank() }.joinToString(" ")
+            val encodedQuery = URLEncoder.encode(query, "UTF-8")
+            val url = "https://lrclib.net/api/search?q=$encodedQuery"
+            val request = Request.Builder().url(url).header("User-Agent", userAgent).build()
+            client.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    response.body?.string()?.let { b ->
+                        val arr = JSONArray(b)
+                        for (i in 0 until minOf(arr.length(), 15)) {
+                            val item = arr.getJSONObject(i)
+                            val plain = optCleanLyrics(item, "plainLyrics")
+                            val synced = optCleanLyrics(item, "syncedLyrics")
+                            if (!plain.isNullOrBlank() || !synced.isNullOrBlank()) {
+                                val tName = item.optString("trackName", trackName)
+                                val aName = item.optString("artistName", artistName)
+                                val albName = item.optString("albumName", "")
+                                val srcLabel = if (albName.isNotBlank()) "LRCLIB • $albName" else "LRCLIB"
+                                val res = LyricsResult(
+                                    trackName = tName,
+                                    artistName = aName,
+                                    plainLyrics = plain,
+                                    syncedLyrics = synced,
+                                    source = srcLabel
+                                )
+                                // Avoid exact duplicate lyrics text
+                                if (candidates.none { it.bestLyrics.trim() == res.bestLyrics.trim() }) {
+                                    candidates.add(res)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("LyricsRepository", "Error buscando candidatos de letra en LRCLIB", e)
+        }
+
+        candidates
+    }
+
     private fun fetchFromLrcLib(
         trackName: String,
         artistName: String,

@@ -34,6 +34,7 @@ import coil.compose.AsyncImage
 import com.example.data.model.AudioFormat
 import com.example.data.storage.ThemeMode
 import com.example.ui.components.CoverArtPickerSheet
+import com.example.ui.components.LyricsPickerSheet
 import com.example.ui.components.OnlineSearchResultsSheet
 import com.example.ui.components.PreviewDiffDialog
 import com.example.ui.theme.*
@@ -595,6 +596,25 @@ fun SongEditorScreen(
                                     Text("Gemini", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                 }
                             }
+
+                            if (draft.lyrics.isNotBlank()) {
+                                OutlinedButton(
+                                    onClick = { viewModel.clearLyrics() },
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                    modifier = Modifier.testTag("btn_clear_lyrics")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.DeleteOutline,
+                                        contentDescription = "Borrar Letra",
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Borrar", color = MaterialTheme.colorScheme.error, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
                         }
                     }
 
@@ -842,6 +862,16 @@ fun SongEditorScreen(
             onSelectOption = { opt -> viewModel.selectCoverOption(opt) },
             onCustomImagePicked = { bytes -> viewModel.setCustomCoverFromBytes(bytes) },
             onDismiss = { viewModel.hideCoverPickerSheet() },
+            isAmoled = isAmoled
+        )
+    }
+
+    if (editorState.showLyricsPickerSheet) {
+        LyricsPickerSheet(
+            candidates = editorState.lyricsCandidates,
+            isLoading = editorState.isSearchingLyrics,
+            onSelectLyrics = { candidate -> viewModel.applySelectedLyrics(candidate) },
+            onDismiss = { viewModel.dismissLyricsPicker() },
             isAmoled = isAmoled
         )
     }

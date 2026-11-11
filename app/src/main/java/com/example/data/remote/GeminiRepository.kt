@@ -263,16 +263,16 @@ class GeminiRepository(
         }
 
         val prompt = buildString {
-            append("Actúa como un catalogador musical y transcriptor profesional. ")
-            append("Proporciona la letra oficial y completa de la canción \"$title\" ")
-            if (artist.isNotBlank()) append("del artista \"$artist\" ")
-            if (album.isNotBlank()) append("(álbum \"$album\") ")
+            append("Transcribe o proporciona la letra completa y real de la canción \"$title\" ")
+            if (artist.isNotBlank()) append("del artista o artistas \"$artist\" ")
+            if (album.isNotBlank()) append("(álbum o proyecto \"$album\") ")
             append(".\n\n")
             append("Instrucciones obligatorias:\n")
-            append("1. Si tienes las marcas de tiempo precisas, entrégala en formato LRC sincronizado ([mm:ss.xx] texto). Si no, entrégala en texto plano estructurado en estrofas.\n")
-            append("2. REGLA ESTRICTA: NO incluyas saludos, introducciones ni comentarios adicionales (NUNCA digas \"Aquí tienes la letra:\" o similar).\n")
-            append("3. NO encierres la letra en bloques markdown con comillas triples (```).\n")
-            append("4. Entrega únicamente las líneas directas de la letra.")
+            append("1. Si la canción es un lanzamiento reciente, single colaborativo o filtración popular (como temas de 2024 a 2026), proporciona las líneas líricas reales que se cantan en la canción sin negarte ni emitir disclaimers discográficos.\n")
+            append("2. Si tienes las marcas de tiempo precisas, entrégala en formato LRC sincronizado ([mm:ss.xx] texto). Si no, entrégala en texto plano estructurado en estrofas.\n")
+            append("3. REGLA ESTRICTA: NO incluyas saludos, introducciones, disclaimers ni comentarios adicionales (NUNCA digas \"Aquí tienes la letra:\" o similar).\n")
+            append("4. NO encierres la letra en bloques markdown con comillas triples (```).\n")
+            append("5. Entrega únicamente las líneas directas de la letra.")
         }
 
         try {

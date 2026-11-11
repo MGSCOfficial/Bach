@@ -8,16 +8,18 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 ## [1.2.0] - 2026-11-10
 
 ### Añadido
-- **Visualización en Cuadrícula (Grid View)**: Soporte conmutable entre vista de Lista y vista de Cuadrícula (2 columnas) en las pestañas *Canciones* y *Carpetas*, con persistencia de preferencias en `SettingsManager`.
-- **Reconocimiento de Jerarquía de Subcarpetas**: Escaneo anatómico en `FolderManager` que desglosa y reconoce cada subcarpeta con archivos de audio como una carpeta independiente con su nombre y recuento de pistas correspondiente.
-- **Gestión y Desvinculación de Carpetas**: Botón de desvinculación individual por carpeta en `FoldersScreen` con diálogo de confirmación seguro (sin eliminar archivos físicos del almacenamiento).
-- **Componentes `TrackGridCard` y `FolderGridCard`**: Renderizado enriquecido para tarjetas en cuadrícula con carátulas cuadradas de alta resolución e insignias de formato.
-- **Firma Determinista en CI**: Inclusión de `debug.keystore` estático en el repositorio para garantizar paridad de firmas binarias entre compilaciones locales y las compiladas en la nube mediante GitHub Actions.
+- **Selector de Opciones de Letra (`LyricsPickerSheet`)**: Al buscar en LRCLIB ya no se sobrescribe ciegamente la letra. Ahora se despliega una hoja modal con todas las versiones candidatas disponibles (diferenciando `LRC Sincronizada` vs `Texto Plano`, previsualización de estrofas y álbum), permitiendo al usuario elegir cuál aplicar o descartar.
+- **Botón de Eliminación Rápida de Letra**: Botón "Borrar" en el encabezado de letra de `SongEditorScreen` para vaciar el borrador lírico con un solo toque.
+- **Visualización en Cuadrícula (Grid View)**: Soporte conmutable entre vista de Lista y vista de Cuadrícula (2 columnas) en las pestañas *Canciones* y *Carpetas*, con persistencia en `SettingsManager`.
+- **Reconocimiento de Jerarquía de Subcarpetas**: Detección anatómica en `FolderManager` que desglosa y reconoce cada subcarpeta con archivos de audio como carpeta independiente con su propio contador de canciones.
+- **Desvinculación Segura de Carpetas**: Botón de desvinculación individual por carpeta en `FoldersScreen` con diálogo de confirmación seguro.
 
 ### Corregido
-- **Desbloqueo de Campos de Metadatos en Editor**: Configuración de `windowSoftInputMode="adjustResize"` en `AndroidManifest.xml` y holgura mediante `Modifier.imePadding()` en `SongEditorScreen`, resolviendo el bloqueo del teclado virtual y permitiendo editar libremente título, artista, álbum, año, género, pista y notas.
+- **Desbloqueo Total de Edición de Campos (`AudioTrack.equals` & `StateFlow`)**: Corrección arquitectónica crítica en `AudioModels.kt`. La sobreescritura previa de `equals()` comparaba únicamente `id == other.id`, provocando que `MutableStateFlow` considerara los estados idénticos tras cada tecla y descartara el 100% de los caracteres tipeados o borrados. Con la comparación estructural completa, todos los campos (`Título`, `Artista`, `Álbum`, `Artista del Álbum`, `Año`, `Género`, `Pista`, `Notas`) responden de forma inmediata y fluida al teclado.
+- **Gobernanza Estricta de Guardado de Letras**: En `AudioTagWriter` y `MusicViewModel`, si las opciones "Incrustar letra" y "Guardar archivo .lrc" están apagadas, se garantiza que no se escribe ningún tag USLT en MP3, ningún átomo `©lyr` en M4A, ni se genera archivo `.lrc`. Si el usuario borra la letra y guarda con incrustación activa, los tags antiguos se eliminan limpiamente del archivo.
+- **Calibración de Letras con Gemini para Singles y Filtraciones**: Ajuste de prompt en `GeminiRepository` para evitar disclaimers de catalogación tradicional en temas recientes o colaboraciones (como "Tsunami" de DJ Snake, Future y Travis Scott).
 - **Adaptación 100% a Temas en Selector de Carátulas**: Erradicación del color verde estático en `CoverArtPickerSheet`, conectando la paleta a `LocalAccentColor` (Material You) y al negro absoluto `#000000` en modo AMOLED.
-- **Actualización de Modelos Gemini (HTTP 404)**: Migración obligatoria de los identificadores retirados `gemini-2.5-flash` hacia los modelos modernos activos `gemini-3.8-flash` y `gemini-3.8-pro`, con migración transparente de claves previas en disco.
+- **Cascada de Modelos Gemini y Downsampling**: Soporte para `gemini-3.5-flash-lite`, `gemini-flash-lite-latest` y `gemini-3.5-flash` con reintento ante 503 y compresión de carátulas para evitar caídas por timeout.
 
 ---
 

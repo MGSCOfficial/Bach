@@ -59,6 +59,8 @@ data class EditorUiState(
     val selectedCoverOption: CoverArtOption? = null,
     val isLoadingCovers: Boolean = false,
     val isSearchingLyrics: Boolean = false,
+    val lyricsCandidates: List<LyricsResult> = emptyList(),
+    val showLyricsPickerSheet: Boolean = false,
     val saveLrcFile: Boolean = true,
     val embedLyrics: Boolean = true,
     val showCandidateSheet: Boolean = false,
@@ -599,38 +601,53 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun searchLyricsForCurrentTrack() {
         val draft = _editorState.value.draftTrack ?: return
-        if (draft.title.isBlank() && draft.artist.isBlank()) return
+        val title = draft.title.ifBlank { draft.fileName.substringBeforeLast(".") }
 
         viewModelScope.launch {
             _editorState.update { it.copy(isSearchingLyrics = true) }
-            val result = lyricsRepo.fetchLyrics(
-                trackName = draft.title,
+            val candidates = lyricsRepo.searchAllLyrics(
+                trackName = title,
                 artistName = draft.artist,
-                albumName = draft.album,
-                durationMs = draft.durationMs,
-                settings = _settings.value
+                albumName = draft.album
             )
 
             _editorState.update { state ->
-                val curDraft = state.draftTrack ?: return@update state
-                val clean = result?.bestLyrics?.trim().orEmpty()
-                val hasValid = result != null && clean.isNotBlank() && !clean.equals("null", ignoreCase = true)
-                if (hasValid) {
-                    state.copy(
-                        isSearchingLyrics = false,
-                        draftTrack = curDraft.copy(
-                            lyrics = clean,
-                            hasLyrics = true
-                        ),
-                        saveNotification = "Letra encontrada y asignada (${result?.source})."
-                    )
-                } else {
-                    state.copy(
-                        isSearchingLyrics = false,
-                        saveNotification = "No se encontró letra en línea para esta canción."
-                    )
-                }
+                state.copy(
+                    isSearchingLyrics = false,
+                    lyricsCandidates = candidates,
+                    showLyricsPickerSheet = candidates.isNotEmpty(),
+                    saveNotification = if (candidates.isEmpty()) "No se encontraron letras en LRCLIB para '$title'" else null
+                )
             }
+        }
+    }
+
+    fun applySelectedLyrics(candidate: LyricsResult) {
+        val chosen = candidate.bestLyrics.trim()
+        _editorState.update { state ->
+            val curDraft = state.draftTrack ?: return@update state
+            state.copy(
+                draftTrack = curDraft.copy(
+                    lyrics = chosen,
+                    hasLyrics = chosen.isNotBlank()
+                ),
+                showLyricsPickerSheet = false,
+                saveNotification = "Letra aplicada desde ${candidate.source}"
+            )
+        }
+    }
+
+    fun dismissLyricsPicker() {
+        _editorState.update { it.copy(showLyricsPickerSheet = false) }
+    }
+
+    fun clearLyrics() {
+        _editorState.update { state ->
+            val curDraft = state.draftTrack ?: return@update state
+            state.copy(
+                draftTrack = curDraft.copy(lyrics = "", hasLyrics = false),
+                saveNotification = "Letra eliminada del borrador"
+            )
         }
     }
 
@@ -781,10 +798,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             if (success) {
+                val lyricsActuallySaved = (embedLyrics || saveLrc) && hasValidLyrics
                 val updatedTrack = draft.copy(
                     hasCover = coverBytes != null && coverBytes.isNotEmpty(),
                     coverArtBytes = coverBytes,
-                    hasLyrics = hasValidLyrics,
+                    lyrics = if (lyricsActuallySaved) cleanLyrics else "",
+                    hasLyrics = lyricsActuallySaved,
                     dateModified = System.currentTimeMillis()
                 )
 

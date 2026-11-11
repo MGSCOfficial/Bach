@@ -124,8 +124,9 @@ object AudioTagWriter {
         }
 
         // Embedded Lyrics (USLT frame in ID3v2.3)
-        val lyrics = lyricsText ?: track.lyrics
-        if (lyrics.isNotBlank()) {
+        // If lyricsText is null, do not write any USLT frame (respects embedLyrics=false or stripped lyrics)
+        val lyrics = lyricsText?.trim() ?: ""
+        if (lyrics.isNotBlank() && !lyrics.equals("null", ignoreCase = true)) {
             val usltData = ByteArrayOutputStream()
             usltData.write(0x03) // UTF-8 encoding
             usltData.write("eng".toByteArray(Charsets.US_ASCII)) // language: 3 bytes
@@ -198,7 +199,7 @@ object AudioTagWriter {
         coverBytes: ByteArray?,
         lyricsText: String? = null
     ): ByteArray {
-        val newUdta = buildM4aUdtaAtom(track, coverBytes ?: track.coverArtBytes, lyricsText ?: track.lyrics)
+        val newUdta = buildM4aUdtaAtom(track, coverBytes ?: track.coverArtBytes, lyricsText?.trim() ?: "")
         val (moovStart, moovLength) = findTopLevelAtom(originalBytes, "moov")
 
         if (moovStart == -1 || moovLength <= 8) {
