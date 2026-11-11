@@ -93,6 +93,42 @@ fun AudioCoverThumbnail(
 }
 
 @Composable
+fun AudioFormatBadge(
+    format: AudioFormat,
+    modifier: Modifier = Modifier,
+    fontSize: androidx.compose.ui.unit.TextUnit = 8.sp,
+    paddingValues: PaddingValues = PaddingValues(horizontal = 4.dp, vertical = 1.dp),
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(3.dp)
+) {
+    val isMp3 = format == AudioFormat.MP3
+    // Adaptación armónica a Material You con contraste garantizado
+    val containerColor = if (isMp3) {
+        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.95f)
+    } else {
+        MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.95f)
+    }
+    val contentColor = if (isMp3) {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    } else {
+        MaterialTheme.colorScheme.onTertiaryContainer
+    }
+
+    Surface(
+        shape = shape,
+        color = containerColor,
+        modifier = modifier
+    ) {
+        Text(
+            text = format.name,
+            color = contentColor,
+            fontSize = fontSize,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(paddingValues)
+        )
+    }
+}
+
+@Composable
 fun TrackCard(
     track: AudioTrack,
     isPlaying: Boolean,
@@ -139,21 +175,14 @@ fun TrackCard(
                 )
 
                 // Format badge overlay
-                Surface(
+                AudioFormatBadge(
+                    format = track.format,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(3.dp),
-                    shape = RoundedCornerShape(3.dp),
-                    color = if (track.format == AudioFormat.MP3) EmeraldDark.copy(alpha = 0.9f) else VioletDark.copy(alpha = 0.9f)
-                ) {
-                    Text(
-                        text = track.format.name,
-                        color = Color.White,
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
-                    )
-                }
+                    fontSize = 8.sp,
+                    paddingValues = PaddingValues(horizontal = 3.dp, vertical = 1.dp)
+                )
             }
 
             Spacer(modifier = Modifier.width(14.dp))
@@ -296,21 +325,15 @@ fun TrackGridCard(
                 )
 
                 // Format badge overlay (Top-Start)
-                Surface(
+                AudioFormatBadge(
+                    format = track.format,
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(8.dp),
+                    fontSize = 9.sp,
                     shape = RoundedCornerShape(4.dp),
-                    color = if (track.format == AudioFormat.MP3) EmeraldDark.copy(alpha = 0.9f) else VioletDark.copy(alpha = 0.9f)
-                ) {
-                    Text(
-                        text = track.format.name,
-                        color = Color.White,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                    )
-                }
+                    paddingValues = PaddingValues(horizontal = 5.dp, vertical = 2.dp)
+                )
 
                 // Play / Pause Circle Button (Bottom-End)
                 Box(

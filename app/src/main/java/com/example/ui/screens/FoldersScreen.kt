@@ -373,6 +373,15 @@ fun FoldersScreen(
                     }
                     when (folderSortOrder) {
                         SortOrder.RECENTLY_MODIFIED -> filtered.sortedByDescending { it.dateModified }
+                        SortOrder.OLDEST_MODIFIED -> filtered.sortedBy { it.dateModified }
+                        SortOrder.HAS_LYRICS_FIRST -> filtered.sortedWith(
+                            compareByDescending<AudioTrack> { it.hasLyrics || it.lyrics.isNotBlank() }
+                                .thenByDescending { it.dateModified }
+                        )
+                        SortOrder.NO_LYRICS_FIRST -> filtered.sortedWith(
+                            compareBy<AudioTrack> { it.hasLyrics || it.lyrics.isNotBlank() }
+                                .thenByDescending { it.dateModified }
+                        )
                         SortOrder.TITLE_ASC -> filtered.sortedBy { it.displayTitle.lowercase() }
                         SortOrder.TITLE_DESC -> filtered.sortedByDescending { it.displayTitle.lowercase() }
                         SortOrder.ARTIST_ASC -> filtered.sortedBy { it.displayArtist.lowercase() }

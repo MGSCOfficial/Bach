@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.*
+import com.example.data.remote.GeminiModelOption
 import com.example.data.remote.GeminiRepository
 import com.example.data.remote.LyricsRepository
 import com.example.data.remote.OnlineMetadataRepository
@@ -28,6 +29,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 
 enum class LibraryFilter(val label: String) {
     ALL("Todas"),
@@ -70,6 +72,7 @@ data class EditorUiState(
     val isSaving: Boolean = false,
     val saveNotification: String? = null,
     val isGeminiLoading: Boolean = false,
+    val isGeminiSyncingLyrics: Boolean = false,
     val geminiStatusMessage: String? = null
 )
 
@@ -90,6 +93,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _editorState = MutableStateFlow(EditorUiState())
     val editorState: StateFlow<EditorUiState> = _editorState.asStateFlow()
+
+    private val _availableGeminiModels = MutableStateFlow<List<GeminiModelOption>>(emptyList())
+    val availableGeminiModels: StateFlow<List<GeminiModelOption>> = _availableGeminiModels.asStateFlow()
+
+    private val _isLoadingGeminiModels = MutableStateFlow(false)
+    val isLoadingGeminiModels: StateFlow<Boolean> = _isLoadingGeminiModels.asStateFlow()
 
     fun updateThemeMode(mode: ThemeMode) {
         settingsManager.setThemeMode(mode)
@@ -149,6 +158,21 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun updateGeminiModel(model: String) {
         settingsManager.setGeminiModel(model)
         _settings.update { it.copy(geminiModel = model) }
+    }
+
+    fun fetchAvailableGeminiModels() {
+        val apiKey = _settings.value.geminiApiKey
+        if (apiKey.isBlank()) return
+        viewModelScope.launch {
+            _isLoadingGeminiModels.value = true
+            val res = geminiRepo.fetchAvailableModels(apiKey)
+            _isLoadingGeminiModels.value = false
+            res.onSuccess { models ->
+                _availableGeminiModels.value = models
+            }.onFailure { err ->
+                Log.w("MusicViewModel", "Error fetching Gemini models", err)
+            }
+        }
     }
 
     fun toggleSongsLayoutMode() {
@@ -378,6 +402,15 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         // 3. Sort
         return when (sortOrder) {
             SortOrder.RECENTLY_MODIFIED -> searched.sortedByDescending { it.dateModified }
+            SortOrder.OLDEST_MODIFIED -> searched.sortedBy { it.dateModified }
+            SortOrder.HAS_LYRICS_FIRST -> searched.sortedWith(
+                compareByDescending<AudioTrack> { it.hasLyrics || it.lyrics.isNotBlank() }
+                    .thenByDescending { it.dateModified }
+            )
+            SortOrder.NO_LYRICS_FIRST -> searched.sortedWith(
+                compareBy<AudioTrack> { it.hasLyrics || it.lyrics.isNotBlank() }
+                    .thenByDescending { it.dateModified }
+            )
             SortOrder.TITLE_ASC -> searched.sortedBy { it.displayTitle.lowercase() }
             SortOrder.TITLE_DESC -> searched.sortedByDescending { it.displayTitle.lowercase() }
             SortOrder.ARTIST_ASC -> searched.sortedBy { it.displayArtist.lowercase() }
@@ -858,71 +891,251 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     // ==================== GEMINI AI INTEGRATION ====================
 
+    private fun readTrackAudioBytes(context: Context, fileUriStr: String, maxBytes: Int = 12 * 1024 * 1024): ByteArray? {
+        return try {
+            val uri = Uri.parse(fileUriStr)
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                val buffer = ByteArray(8192)
+                val baos = ByteArrayOutputStream()
+                var total = 0
+                var read: Int
+                while (input.read(buffer).also { read = it } != -1) {
+                    baos.write(buffer, 0, read)
+                    total += read
+                    if (total >= maxBytes) break
+                }
+                baos.toByteArray()
+            }
+        } catch (e: Exception) {
+            Log.e("MusicViewModel", "Error reading track audio bytes", e)
+            null
+        }
+    }
+
     fun analyzeCoverWithGemini(context: Context) {
+        identifyTrackWithGemini(context)
+    }
+
+    fun identifyTrackWithGemini(context: Context) {
         val draft = _editorState.value.draftTrack ?: return
         val coverBytes = draft.coverArtBytes ?: _editorState.value.selectedCoverOption?.bytes
+        val s = _settings.value
 
-        if (coverBytes == null || coverBytes.isEmpty()) {
-            Toast.makeText(context, "No hay carátula incrustada para analizar.", Toast.LENGTH_SHORT).show()
+        if (!s.geminiEnabled || s.geminiApiKey.isBlank()) {
+            if (coverBytes != null && coverBytes.isNotEmpty()) {
+                val prompt = GeminiPromptHelper.buildCoverOcrPrompt(
+                    fileName = draft.fileName,
+                    existingTitle = draft.title,
+                    existingArtist = draft.artist,
+                    existingAlbum = draft.album
+                )
+                GeminiPromptHelper.shareCoverWithPrompt(context, prompt, coverBytes)
+            } else {
+                val prompt = GeminiPromptHelper.buildDisambiguationPrompt(
+                    fileName = draft.fileName,
+                    existingTags = mapOf("title" to draft.title, "artist" to draft.artist, "album" to draft.album)
+                )
+                GeminiPromptHelper.shareTextPrompt(context, prompt, "Identificar canción con Gemini...")
+            }
             return
         }
 
-        val s = _settings.value
-        if (s.geminiEnabled && s.geminiApiKey.isNotBlank()) {
-            // Enfoque 2: Integración Nativa con API Key
-            viewModelScope.launch {
-                _editorState.update {
-                    it.copy(
-                        isGeminiLoading = true,
-                        geminiStatusMessage = "Analizando carátula con Google Gemini (${s.geminiModel})..."
-                    )
-                }
+        viewModelScope.launch {
+            _editorState.update {
+                it.copy(
+                    isGeminiLoading = true,
+                    geminiStatusMessage = if (coverBytes != null && coverBytes.isNotEmpty()) {
+                        "Analizando carátula con Google Gemini (${s.geminiModel})..."
+                    } else {
+                        "Identificando por metadatos con Gemini (${s.geminiModel})..."
+                    }
+                )
+            }
 
-                val result = geminiRepo.analyzeCoverImage(
+            val result = if (coverBytes != null && coverBytes.isNotEmpty()) {
+                geminiRepo.analyzeCoverImage(
                     coverBytes = coverBytes,
                     apiKey = s.geminiApiKey,
                     model = s.geminiModel,
                     hintTitle = draft.title,
                     hintArtist = draft.artist
                 )
+            } else {
+                val existingTags = mutableMapOf<String, String>()
+                if (draft.title.isNotBlank()) existingTags["title"] = draft.title
+                if (draft.artist.isNotBlank()) existingTags["artist"] = draft.artist
+                if (draft.album.isNotBlank()) existingTags["album"] = draft.album
+                geminiRepo.resolveMetadataFromText(
+                    fileName = draft.fileName,
+                    existingTags = existingTags,
+                    apiKey = s.geminiApiKey,
+                    model = s.geminiModel
+                )
+            }
 
-                _editorState.update { state ->
-                    val curDraft = state.draftTrack ?: return@update state
-                    result.fold(
-                        onSuccess = { candidate ->
-                            state.copy(
-                                isGeminiLoading = false,
-                                geminiStatusMessage = null,
-                                draftTrack = curDraft.copy(
-                                    title = candidate.title.ifBlank { curDraft.title },
-                                    artist = candidate.artist.ifBlank { curDraft.artist },
-                                    album = candidate.album.ifBlank { curDraft.album },
-                                    year = candidate.year.ifBlank { curDraft.year },
-                                    genre = candidate.genre.ifBlank { curDraft.genre },
-                                    trackNumber = candidate.trackNumber.ifBlank { curDraft.trackNumber }
-                                ),
-                                saveNotification = "Metadatos identificados con Gemini: ${candidate.title} — ${candidate.artist}"
-                            )
-                        },
-                        onFailure = { err ->
-                            state.copy(
-                                isGeminiLoading = false,
-                                geminiStatusMessage = null,
-                                saveNotification = "Error Gemini: ${err.localizedMessage ?: "Fallo al analizar"}"
-                            )
-                        }
+            _editorState.update { state ->
+                val curDraft = state.draftTrack ?: return@update state
+                result.fold(
+                    onSuccess = { candidate ->
+                        state.copy(
+                            isGeminiLoading = false,
+                            geminiStatusMessage = null,
+                            draftTrack = curDraft.copy(
+                                title = candidate.title.ifBlank { curDraft.title },
+                                artist = candidate.artist.ifBlank { curDraft.artist },
+                                album = candidate.album.ifBlank { curDraft.album },
+                                year = candidate.year.ifBlank { curDraft.year },
+                                genre = candidate.genre.ifBlank { curDraft.genre },
+                                trackNumber = candidate.trackNumber.ifBlank { curDraft.trackNumber }
+                            ),
+                            saveNotification = "Metadatos identificados con Gemini: ${candidate.title} — ${candidate.artist}"
+                        )
+                    },
+                    onFailure = { err ->
+                        state.copy(
+                            isGeminiLoading = false,
+                            geminiStatusMessage = null,
+                            saveNotification = "Error Gemini: ${err.localizedMessage ?: "Fallo al identificar"}"
+                        )
+                    }
+                )
+            }
+        }
+    }
+
+    fun identifyTrackWithAudioUsingGemini(context: Context) {
+        val draft = _editorState.value.draftTrack ?: return
+        val s = _settings.value
+        if (!s.geminiEnabled || s.geminiApiKey.isBlank()) {
+            Toast.makeText(context, "Configura tu clave de Gemini en Ajustes", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        viewModelScope.launch {
+            _editorState.update {
+                it.copy(
+                    isGeminiLoading = true,
+                    geminiStatusMessage = "Leyendo audio e identificando con Gemini (${s.geminiModel})..."
+                )
+            }
+
+            val audioBytes = readTrackAudioBytes(context, draft.fileUri)
+            if (audioBytes == null || audioBytes.isEmpty()) {
+                _editorState.update {
+                    it.copy(
+                        isGeminiLoading = false,
+                        geminiStatusMessage = null,
+                        saveNotification = "No se pudo leer el archivo de audio para identificarlo."
                     )
                 }
+                return@launch
             }
-        } else {
-            // Enfoque 1: Compartir asistido (Sin API Key)
-            val prompt = GeminiPromptHelper.buildCoverOcrPrompt(
-                fileName = draft.fileName,
-                existingTitle = draft.title,
-                existingArtist = draft.artist,
-                existingAlbum = draft.album
+
+            val mime = if (draft.format == AudioFormat.MP3) "audio/mp3" else "audio/mp4"
+            val result = geminiRepo.identifyTrackFromAudio(
+                audioBytes = audioBytes,
+                audioMimeType = mime,
+                apiKey = s.geminiApiKey,
+                model = s.geminiModel
             )
-            GeminiPromptHelper.shareCoverWithPrompt(context, prompt, coverBytes)
+
+            _editorState.update { state ->
+                val curDraft = state.draftTrack ?: return@update state
+                result.fold(
+                    onSuccess = { candidate ->
+                        state.copy(
+                            isGeminiLoading = false,
+                            geminiStatusMessage = null,
+                            draftTrack = curDraft.copy(
+                                title = candidate.title.ifBlank { curDraft.title },
+                                artist = candidate.artist.ifBlank { curDraft.artist },
+                                album = candidate.album.ifBlank { curDraft.album },
+                                year = candidate.year.ifBlank { curDraft.year },
+                                genre = candidate.genre.ifBlank { curDraft.genre },
+                                trackNumber = candidate.trackNumber.ifBlank { curDraft.trackNumber }
+                            ),
+                            saveNotification = "Pista identificada por audio: ${candidate.title} — ${candidate.artist}"
+                        )
+                    },
+                    onFailure = { err ->
+                        state.copy(
+                            isGeminiLoading = false,
+                            geminiStatusMessage = null,
+                            saveNotification = "Error Gemini: ${err.localizedMessage ?: "Fallo al identificar por audio"}"
+                        )
+                    }
+                )
+            }
+        }
+    }
+
+    fun synchronizeLyricsWithAudioUsingGemini(context: Context) {
+        val draft = _editorState.value.draftTrack ?: return
+        val plainLyrics = draft.lyrics
+        if (plainLyrics.isBlank()) {
+            Toast.makeText(context, "No hay letra para sincronizar.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val s = _settings.value
+        if (!s.geminiEnabled || s.geminiApiKey.isBlank()) {
+            Toast.makeText(context, "Configura tu clave de Gemini en Ajustes", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        viewModelScope.launch {
+            _editorState.update {
+                it.copy(
+                    isGeminiSyncingLyrics = true,
+                    geminiStatusMessage = "Sincronizando letra con el audio vía Gemini AI..."
+                )
+            }
+
+            val audioBytes = readTrackAudioBytes(context, draft.fileUri)
+            if (audioBytes == null || audioBytes.isEmpty()) {
+                _editorState.update {
+                    it.copy(
+                        isGeminiSyncingLyrics = false,
+                        geminiStatusMessage = null,
+                        saveNotification = "No se pudo leer el archivo de audio para sincronizar."
+                    )
+                }
+                return@launch
+            }
+
+            val mime = if (draft.format == AudioFormat.MP3) "audio/mp3" else "audio/mp4"
+            val result = geminiRepo.synchronizeLyricsWithAudio(
+                audioBytes = audioBytes,
+                audioMimeType = mime,
+                plainLyrics = plainLyrics,
+                apiKey = s.geminiApiKey,
+                model = s.geminiModel
+            )
+
+            _editorState.update { state ->
+                val curDraft = state.draftTrack ?: return@update state
+                result.fold(
+                    onSuccess = { lyricsRes ->
+                        val synced = lyricsRes.syncedLyrics ?: lyricsRes.plainLyrics.orEmpty()
+                        state.copy(
+                            isGeminiSyncingLyrics = false,
+                            geminiStatusMessage = null,
+                            draftTrack = curDraft.copy(
+                                lyrics = synced.trim(),
+                                hasLyrics = synced.isNotBlank()
+                            ),
+                            saveNotification = "¡Letra sincronizada con éxito con Gemini!"
+                        )
+                    },
+                    onFailure = { err ->
+                        state.copy(
+                            isGeminiSyncingLyrics = false,
+                            geminiStatusMessage = null,
+                            saveNotification = "Error Gemini: ${err.localizedMessage ?: "No se pudo sincronizar la letra"}"
+                        )
+                    }
+                )
+            }
         }
     }
 

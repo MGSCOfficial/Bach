@@ -33,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.data.model.AudioFormat
 import com.example.data.storage.ThemeMode
+import com.example.ui.components.AudioFormatBadge
 import com.example.ui.components.CoverArtPickerSheet
 import com.example.ui.components.LyricsPickerSheet
 import com.example.ui.components.OnlineSearchResultsSheet
@@ -130,19 +131,13 @@ fun SongEditorScreen(
                     }
                 },
                 actions = {
-                    Surface(
+                    AudioFormatBadge(
+                        format = draft.format,
+                        fontSize = 11.sp,
                         shape = RoundedCornerShape(6.dp),
-                        color = if (draft.format == AudioFormat.MP3) EmeraldDark else VioletDark,
+                        paddingValues = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                         modifier = Modifier.padding(end = 8.dp)
-                    ) {
-                        Text(
-                            text = draft.format.name,
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
+                    )
 
                     IconButton(
                         onClick = { viewModel.showDiffPreview() },
@@ -310,33 +305,54 @@ fun SongEditorScreen(
                     val selectedCoverBytes = editorState.selectedCoverOption?.bytes
                     val hasCoverBytes = (draft.coverArtBytes != null && draft.coverArtBytes.isNotEmpty()) ||
                             (selectedCoverBytes != null && selectedCoverBytes.isNotEmpty())
-                    if (hasCoverBytes) {
-                        Spacer(modifier = Modifier.height(10.dp))
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         OutlinedButton(
-                            onClick = { viewModel.analyzeCoverWithGemini(context) },
+                            onClick = { viewModel.identifyTrackWithGemini(context) },
                             enabled = !editorState.isGeminiLoading,
                             shape = RoundedCornerShape(10.dp),
                             border = BorderStroke(1.dp, VioletAccent.copy(alpha = 0.7f)),
                             colors = ButtonDefaults.outlinedButtonColors(
                                 containerColor = VioletAccent.copy(alpha = 0.12f)
                             ),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                            modifier = Modifier.testTag("btn_gemini_cover_ocr")
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("btn_gemini_cover_ocr")
                         ) {
-                            if (editorState.isGeminiLoading) {
+                            if (editorState.isGeminiLoading && !editorState.isGeminiSyncingLyrics) {
                                 CircularProgressIndicator(color = VioletAccent, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Analizando con Gemini...", color = VioletAccent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Analizando...", color = VioletAccent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                             } else {
-                                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = VioletAccent, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                val label = if (settings.geminiEnabled && settings.geminiApiKey.isNotBlank()) {
-                                    "Identificar con Gemini (${settings.geminiModel})"
-                                } else {
-                                    "Identificar con Gemini (Compartir)"
-                                }
-                                Text(label, color = VioletAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = VioletAccent, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                val label = if (hasCoverBytes) "Carátula" else "Metadatos"
+                                Text("Identificar ($label)", color = VioletAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
+                        }
+
+                        OutlinedButton(
+                            onClick = { viewModel.identifyTrackWithAudioUsingGemini(context) },
+                            enabled = !editorState.isGeminiLoading,
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.7f)),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
+                            ),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("btn_gemini_audio_id")
+                        ) {
+                            Icon(Icons.Default.GraphicEq, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Por Audio", color = MaterialTheme.colorScheme.onTertiaryContainer, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -626,6 +642,37 @@ fun SongEditorScreen(
                                 Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Generar con Gemini", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
+                    }
+
+                    if (draft.lyrics.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        FilledTonalButton(
+                            onClick = { viewModel.synchronizeLyricsWithAudioUsingGemini(context) },
+                            enabled = !editorState.isGeminiSyncingLyrics && !editorState.isGeminiLoading,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("btn_gemini_sync_lyrics"),
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            ),
+                            contentPadding = PaddingValues(vertical = 8.dp)
+                        ) {
+                            if (editorState.isGeminiSyncingLyrics) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(14.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Sincronizando con el audio (Gemini)...", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            } else {
+                                Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Sincronizar Letra con el Audio (Gemini AI)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }

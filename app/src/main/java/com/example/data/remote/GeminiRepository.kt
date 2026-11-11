@@ -19,11 +19,16 @@ import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 
+data class GeminiModelOption(
+    val id: String,
+    val displayName: String
+)
+
 class GeminiRepository(
     private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(45, TimeUnit.SECONDS)
-        .writeTimeout(45, TimeUnit.SECONDS)
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(35, TimeUnit.SECONDS)
+        .writeTimeout(35, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
         .followRedirects(true)
         .build()
@@ -35,13 +40,12 @@ class GeminiRepository(
 
         val FALLBACK_MODELS = listOf(
             "gemini-3.5-flash-lite",
-            "gemini-flash-lite-latest",
             "gemini-3.5-flash"
         )
 
         fun resolveModel(model: String): String = when (model.trim()) {
-            "gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-3.8-flash" -> "gemini-3.5-flash-lite"
-            "gemini-2.5-pro", "gemini-1.5-pro", "gemini-3.8-pro" -> "gemini-3.5-flash"
+            "gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash" -> "gemini-3.5-flash-lite"
+            "gemini-2.5-pro", "gemini-1.5-pro" -> "gemini-3.5-flash"
             else -> model.trim().ifBlank { "gemini-3.5-flash-lite" }
         }
     }
@@ -123,10 +127,8 @@ class GeminiRepository(
                     Log.w(TAG, "[$modelName] attempt $attempt returned HTTP $code: $lastErrorMsg")
 
                     if (code == 503 || code == 429) {
-                        if (attempt == 1) {
-                            delay(1200)
-                            continue
-                        }
+                        Log.w(TAG, "[$modelName] server overloaded ($code), cascading immediately...")
+                        break
                     } else if (code == 404) {
                         break
                     } else if (code == 403 || code == 400) {
@@ -138,6 +140,10 @@ class GeminiRepository(
                     }
                     Log.w(TAG, "[$modelName] attempt $attempt threw exception: ${e.message}")
                     lastErrorMsg = e.message ?: "Error de red con Gemini"
+                    if (e is java.net.SocketTimeoutException) {
+                        Log.w(TAG, "[$modelName] timeout encountered, cascading immediately...")
+                        break
+                    }
                     if (attempt == 1) {
                         delay(1000)
                     }
@@ -400,6 +406,202 @@ class GeminiRepository(
             Result.success(candidate)
         } catch (e: Exception) {
             Log.e(TAG, "Error in resolveMetadataFromText", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun fetchAvailableModels(apiKey: String): Result<List<GeminiModelOption>> = withContext(Dispatchers.IO) {
+        if (apiKey.isBlank()) {
+            return@withContext Result.failure(IllegalArgumentException("Clave API de Gemini vacía"))
+        }
+        val url = "https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey.trim()}"
+        try {
+            val request = Request.Builder().url(url).build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    val msg = parseErrorMessage(response.code, response.body?.string().orEmpty())
+                    return@withContext Result.failure(Exception(msg))
+                }
+                val body = response.body?.string().orEmpty()
+                val root = JSONObject(body)
+                val arr = root.optJSONArray("models") ?: JSONArray()
+                val list = mutableListOf<GeminiModelOption>()
+                for (i in 0 until arr.length()) {
+                    val m = arr.getJSONObject(i)
+                    val rawName = m.optString("name", "")
+                    val modelId = rawName.removePrefix("models/")
+                    val displayName = m.optString("displayName", modelId)
+                    val methods = m.optJSONArray("supportedGenerationMethods")
+                    val supportsGen = methods?.let { mArr ->
+                        (0 until mArr.length()).any { mArr.optString(it) == "generateContent" }
+                    } ?: false
+
+                    if (supportsGen && (modelId.contains("flash", ignoreCase = true) || modelId.contains("pro", ignoreCase = true))) {
+                        list.add(GeminiModelOption(id = modelId, displayName = displayName))
+                    }
+                }
+                val sorted = list.sortedBy { opt ->
+                    when {
+                        opt.id.contains("flash-lite", ignoreCase = true) -> 0
+                        opt.id.contains("flash", ignoreCase = true) -> 1
+                        else -> 2
+                    }
+                }
+                Result.success(sorted)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al listar modelos de Gemini", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun identifyTrackFromAudio(
+        audioBytes: ByteArray,
+        audioMimeType: String,
+        apiKey: String,
+        model: String = "gemini-3.5-flash-lite"
+    ): Result<OnlineCandidate> = withContext(Dispatchers.IO) {
+        if (apiKey.isBlank()) {
+            return@withContext Result.failure(IllegalArgumentException("Clave API de Gemini no configurada."))
+        }
+        if (audioBytes.isEmpty()) {
+            return@withContext Result.failure(IllegalArgumentException("El archivo de audio está vacío."))
+        }
+
+        val prompt = buildString {
+            append("Eres un sistema de reconocimiento acústico musical experto.\n")
+            append("Escucha atentamente el audio adjunto e identifica la canción.\n")
+            append("Responde EXCLUSIVAMENTE con un objeto JSON válido con las siguientes claves:\n")
+            append("\"title\", \"artist\", \"album\", \"year\", \"genre\", \"trackNumber\".\n")
+            append("Si algún dato no es identificable con certeza, déjalo como cadena vacía (\"\").")
+        }
+
+        try {
+            val (responseBody, _) = executeWithModelCascade(model, apiKey) {
+                val requestJson = JSONObject().apply {
+                    val contentsArray = JSONArray().apply {
+                        val contentObj = JSONObject().apply {
+                            val partsArray = JSONArray().apply {
+                                put(JSONObject().apply { put("text", prompt) })
+                                put(JSONObject().apply {
+                                    put("inlineData", JSONObject().apply {
+                                        put("mimeType", audioMimeType)
+                                        put("data", Base64.encodeToString(audioBytes, Base64.NO_WRAP))
+                                    })
+                                })
+                            }
+                            put("parts", partsArray)
+                        }
+                        put(contentObj)
+                    }
+                    put("contents", contentsArray)
+
+                    val genConfig = JSONObject().apply {
+                        put("temperature", 0.1)
+                        put("responseMimeType", "application/json")
+                    }
+                    put("generationConfig", genConfig)
+                }
+                requestJson.toString()
+            }
+
+            val textOutput = extractCandidateText(responseBody)
+            val parsed = JSONObject(textOutput)
+
+            val candidate = OnlineCandidate(
+                source = MetadataSource.GEMINI,
+                title = parsed.optString("title", "").trim(),
+                artist = parsed.optString("artist", "").trim(),
+                album = parsed.optString("album", "").trim(),
+                year = parsed.optString("year", "").trim(),
+                genre = parsed.optString("genre", "").trim(),
+                trackNumber = parsed.optString("trackNumber", "").trim(),
+                matchScore = 95
+            )
+
+            Result.success(candidate)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error en identifyTrackFromAudio", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun synchronizeLyricsWithAudio(
+        audioBytes: ByteArray,
+        audioMimeType: String,
+        plainLyrics: String,
+        apiKey: String,
+        model: String = "gemini-3.5-flash-lite"
+    ): Result<LyricsResult> = withContext(Dispatchers.IO) {
+        if (apiKey.isBlank()) {
+            return@withContext Result.failure(IllegalArgumentException("Clave API de Gemini no configurada."))
+        }
+        if (audioBytes.isEmpty()) {
+            return@withContext Result.failure(IllegalArgumentException("El archivo de audio está vacío."))
+        }
+        if (plainLyrics.isBlank()) {
+            return@withContext Result.failure(IllegalArgumentException("No hay letra para sincronizar."))
+        }
+
+        val prompt = buildString {
+            append("Eres un sincronizador y transcriptor de audio profesional experto en formato LRC sincronizado.\n")
+            append("Escucha atentamente el audio provisto.\n")
+            append("A continuación se presenta la letra base de la canción:\n\n")
+            append("--- LETRA BASE ---\n")
+            append(plainLyrics.trim())
+            append("\n--- FIN LETRA BASE ---\n\n")
+            append("INSTRUCCIONES OBLIGATORIAS:\n")
+            append("1. Escucha la voz y la música en el audio y asigna la marca de tiempo exacta [mm:ss.xx] al inicio exacto de cada verso donde el vocalista canta o rapea la frase.\n")
+            append("2. Conserva íntegramente las palabras y el idioma de la letra base provista.\n")
+            append("3. REGLA ESTRICTA DE SALIDA: Devuelve ÚNICAMENTE las líneas de texto en formato LRC estándar ([mm:ss.xx] verso).\n")
+            append("4. NO incluyas introducciones, comentarios, disclaimers, notas ni bloques de código markdown (```).")
+        }
+
+        try {
+            val (responseBody, usedModel) = executeWithModelCascade(model, apiKey) {
+                val requestJson = JSONObject().apply {
+                    val contentsArray = JSONArray().apply {
+                        val contentObj = JSONObject().apply {
+                            val partsArray = JSONArray().apply {
+                                put(JSONObject().apply { put("text", prompt) })
+                                put(JSONObject().apply {
+                                    put("inlineData", JSONObject().apply {
+                                        put("mimeType", audioMimeType)
+                                        put("data", Base64.encodeToString(audioBytes, Base64.NO_WRAP))
+                                    })
+                                })
+                            }
+                            put("parts", partsArray)
+                        }
+                        put(contentObj)
+                    }
+                    put("contents", contentsArray)
+
+                    val genConfig = JSONObject().apply {
+                        put("temperature", 0.1)
+                    }
+                    put("generationConfig", genConfig)
+                }
+                requestJson.toString()
+            }
+
+            val textOutput = extractCandidateText(responseBody).trim()
+            val cleanLrc = textOutput
+                .replace("```lrc", "")
+                .replace("```", "")
+                .trim()
+
+            val result = LyricsResult(
+                trackName = "",
+                artistName = "",
+                plainLyrics = plainLyrics,
+                syncedLyrics = cleanLrc,
+                source = "Google Gemini ($usedModel • Sincronización de Audio)"
+            )
+
+            Result.success(result)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error en synchronizeLyricsWithAudio", e)
             Result.failure(e)
         }
     }

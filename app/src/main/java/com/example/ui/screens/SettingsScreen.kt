@@ -45,6 +45,14 @@ fun SettingsScreen(
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val accent = LocalAccentColor.current
+    val availableModels by viewModel.availableGeminiModels.collectAsStateWithLifecycle()
+    val isLoadingModels by viewModel.isLoadingGeminiModels.collectAsStateWithLifecycle()
+
+    LaunchedEffect(settings.geminiApiKey) {
+        if (settings.geminiApiKey.isNotBlank() && availableModels.isEmpty()) {
+            viewModel.fetchAvailableGeminiModels()
+        }
+    }
 
     // State for API Key modal configuration
     var activeApiKeyTarget by remember { mutableStateOf<ApiKeyTarget?>(null) }
@@ -569,41 +577,106 @@ fun SettingsScreen(
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Selector de Modelo
-                        Text(
-                            text = "Modelo de Gemini",
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
+                        // Selector de Modelo Dinámico
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            val models = listOf(
-                                "gemini-3.8-flash" to "Flash (Recomendado)",
-                                "gemini-3.8-pro" to "Pro (Alta Precisión)"
+                            Column {
+                                Text(
+                                    text = "Modelo de Gemini",
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                )
+                                Text(
+                                    text = "Activo: ${settings.geminiModel}",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = accent,
+                                        fontSize = 11.sp
+                                    )
+                                )
+                            }
+                            if (settings.geminiApiKey.isNotBlank()) {
+                                TextButton(
+                                    onClick = { viewModel.fetchAvailableGeminiModels() },
+                                    enabled = !isLoadingModels,
+                                    colors = ButtonDefaults.textButtonColors(contentColor = accent)
+                                ) {
+                                    if (isLoadingModels) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(14.dp),
+                                            strokeWidth = 2.dp,
+                                            color = accent
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Consultando...", fontSize = 11.sp)
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.Refresh,
+                                            contentDescription = "Refrescar modelos",
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Refrescar", fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        val displayModels = if (availableModels.isNotEmpty()) {
+                            availableModels.map { it.id to it.displayName }
+                        } else {
+                            listOf(
+                                "gemini-3.5-flash-lite" to "Flash Lite (Ultrarrápido y Estable)",
+                                "gemini-3.5-flash" to "Flash 3.5 (Recomendado)",
+                                "gemini-3.8-flash" to "Flash 3.8 (Experimental / Alta Demanda)"
                             )
-                            models.forEach { (modelId, modelLabel) ->
+                        }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            displayModels.forEach { (modelId, modelLabel) ->
                                 val selected = settings.geminiModel == modelId
                                 Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = if (selected) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (selected) accent.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                                     border = BorderStroke(1.dp, if (selected) accent else Color.Transparent),
                                     modifier = Modifier
-                                        .weight(1f)
+                                        .fillMaxWidth()
                                         .clickable { viewModel.updateGeminiModel(modelId) }
                                 ) {
-                                    Text(
-                                        text = modelLabel,
-                                        fontSize = 12.sp,
-                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (selected) accent else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.padding(vertical = 10.dp)
-                                    )
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = modelLabel,
+                                                fontSize = 12.sp,
+                                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                                color = if (selected) accent else MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = modelId,
+                                                fontSize = 10.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                            )
+                                        }
+                                        if (selected) {
+                                            Icon(
+                                                imageVector = Icons.Default.CheckCircle,
+                                                contentDescription = "Seleccionado",
+                                                tint = accent,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }

@@ -5,6 +5,20 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ---
 
+## [1.3.0] - 2026-11-11
+
+### Añadido
+- **Sincronización Forzada de Letras con Audio vía Gemini AI**: Capacidad multimodal para escuchar el flujo de audio de la pista y alinear automáticamente letras en texto plano o con desfase a marcas temporales milimétricas `[mm:ss.xx]` en formato LRC sin alterar el archivo original en disco.
+- **Selector y Descubrimiento Dinámico de Modelos de Gemini**: Consulta en vivo de los modelos oficiales disponibles en la API de Google AI Studio con botón de refresco y selección dinámica, resolviendo saturaciones en modelos experimentales.
+- **Identificación Acústica y Asistida Sin Carátula**: Posibilidad de identificar canciones mediante análisis de audio acústico directo o deducción por metadatos/nombre de archivo cuando la pista no cuenta con carátula visual.
+- **Badges de Formato Dinámicos con Material You (`AudioFormatBadge`)**: Sustitución de colores rígidos estáticos por `secondaryContainer` y `tertiaryContainer` armonizados automáticamente con la paleta activa del dispositivo (Material You).
+- **Criterios Avanzados de Ordenación en Biblioteca**: Soporte para ordenar por `Modificado (Más antiguos)`, `Con letra primero` y `Sin letra primero`, integrados tanto en la vista general como en cada subcarpeta de `FoldersScreen`.
+
+### Corregido
+- **Mitigación Anatómica de Errores 503 y Timeouts en Gemini**: Optimización de la cascada hacia modelos estables (`gemini-3.5-flash-lite` y `gemini-3.5-flash`) y desconexión inmediata ante saturación del servidor o retrasos (>35s) para evitar bloqueos prolongados de la interfaz.
+
+---
+
 ## [1.2.0] - 2026-11-10
 
 ### Añadido
