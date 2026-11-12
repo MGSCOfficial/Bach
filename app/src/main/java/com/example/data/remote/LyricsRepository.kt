@@ -109,27 +109,42 @@ class LyricsRepository {
         }
 
         // 2. Broad search query via LRCLIB /api/search?q=...
-        val queriesToTry = mutableListOf<String>()
-        val primaryQuery = listOf(artistName, trackName).filter { it.isNotBlank() }.joinToString(" ")
-        if (primaryQuery.isNotBlank()) queriesToTry.add(primaryQuery)
-
-        // Alias for Jack Black -> Tenacious D
-        if (artistName.contains("Jack Black", ignoreCase = true)) {
-            queriesToTry.add("Tenacious D $trackName")
-        }
-
-        // Album + track
-        if (!albumName.isNullOrBlank() && trackName.isNotBlank()) {
-            queriesToTry.add("$trackName $albumName")
-        }
-
-        // Clean title alone (strip punctuation)
         val cleanTrack = trackName
             .replace(Regex("^\\.+"), "")
             .replace(Regex("(?i)\\s*\\(feat\\.[^)]+\\)"), "")
             .replace(Regex("(?i)\\s*\\[feat\\.[^]]+\\]"), "")
             .replace(Regex("(?i)\\s*\\(from[^)]+\\)"), "")
             .trim()
+        val cleanArtist = artistName
+            .replace(Regex("(?i)\\s*\\(feat\\.[^)]+\\)"), "")
+            .trim()
+
+        val queriesToTry = mutableListOf<String>()
+
+        // Prioridad 1: Alias inteligente para Jack Black -> Tenacious D con título saneado
+        if (cleanArtist.contains("Jack Black", ignoreCase = true) || artistName.contains("Jack Black", ignoreCase = true)) {
+            if (cleanTrack.isNotBlank()) queriesToTry.add("Tenacious D $cleanTrack")
+        }
+
+        // Prioridad 2: Artista y título saneados
+        val cleanCombo = listOf(cleanArtist, cleanTrack).filter { it.isNotBlank() }.joinToString(" ")
+        if (cleanCombo.isNotBlank() && !queriesToTry.contains(cleanCombo)) {
+            queriesToTry.add(cleanCombo)
+        }
+
+        // Prioridad 3: Título saneado + Álbum
+        if (!albumName.isNullOrBlank() && cleanTrack.isNotBlank()) {
+            val albCombo = "$cleanTrack $albumName"
+            if (!queriesToTry.contains(albCombo)) queriesToTry.add(albCombo)
+        }
+
+        // Prioridad 4: Consulta cruda original
+        val primaryQuery = listOf(artistName, trackName).filter { it.isNotBlank() }.joinToString(" ")
+        if (primaryQuery.isNotBlank() && !queriesToTry.contains(primaryQuery)) {
+            queriesToTry.add(primaryQuery)
+        }
+
+        // Prioridad 5: Título limpio en solitario
         if (cleanTrack.isNotBlank() && !queriesToTry.contains(cleanTrack)) {
             queriesToTry.add(cleanTrack)
         }

@@ -205,10 +205,17 @@ class OnlineMetadataRepository {
         // Resilient fallback si no hubo resultados iniciales
         if (combined.isEmpty()) {
             val cleanT = t.replace(Regex("^\\.+"), "").replace(Regex("(?i)\\s*\\(feat\\.[^)]+\\)"), "").replace(Regex("(?i)\\s*\\[feat\\.[^]]+\\]"), "").replace(Regex("(?i)\\s*\\(from[^)]+\\)"), "").trim()
-            if (a.contains("Jack Black", ignoreCase = true)) {
+            val hasJackBlack = a.contains("Jack Black", ignoreCase = true) || t.contains("Jack Black", ignoreCase = true)
+            if (hasJackBlack) {
                 val fbTasks = mutableListOf<Deferred<List<OnlineCandidate>>>()
-                if (settings.sourceITunes) fbTasks.add(async { searchITunesAdvanced(cleanT, "Tenacious D", al, extractedTrackNumber, isGenericTitle) })
-                if (settings.sourceDeezer) fbTasks.add(async { searchDeezerAdvanced(cleanT, "Tenacious D", al, extractedTrackNumber, isGenericTitle) })
+                if (settings.sourceITunes) {
+                    fbTasks.add(async { searchITunes("$cleanT Tenacious D") })
+                    fbTasks.add(async { searchITunesAdvanced(cleanT, "Tenacious D", al, extractedTrackNumber, isGenericTitle) })
+                }
+                if (settings.sourceDeezer) {
+                    fbTasks.add(async { searchDeezer("$cleanT Tenacious D") })
+                    fbTasks.add(async { searchDeezerAdvanced(cleanT, "Tenacious D", al, extractedTrackNumber, isGenericTitle) })
+                }
                 for (task in fbTasks) {
                     try { combined.addAll(task.await()) } catch (_: Exception) {}
                 }
