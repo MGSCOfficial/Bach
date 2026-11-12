@@ -5,6 +5,27 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ---
 
+## [1.4.0] - 2026-11-12
+
+### Añadido
+- **Redimensionamiento Quirúrgico de Carátulas**:
+  - Selector de resolución de carátula integrado en `CoverArtPickerSheet` y configurable por defecto en ajustes: `Original (sin redimensionar)`, `1000 px`, `960 px`, `600 px`, `500 px` y `250 px`.
+  - Motor de compresión y escalado de bitmap preservando relación de aspecto (`Bitmap.createScaledBitmap`) en `AudioTagWriter`, reduciendo el peso innecesario de metadatos en archivos MP3 y M4A.
+- **Renombrado Automático de Archivos según Etiquetas de Metadatos**:
+  - Motor de resolución de patrones configurables (`FileRenameHelper`) con soporte para `%artist%`, `%title%`, `%album%`, `%track%` y `%year%`.
+  - Nueva sección en Configuración con conmutador de activación, edición de plantilla, chips de inserción rápida de variables y vista previa en vivo.
+  - Ejecución transaccional tanto en archivos locales como a través de Storage Access Framework (`DocumentFile.renameTo`), sincronizando automáticamente el renombre de archivos complementarios `.lrc` e invalidando la caché de miniaturas sin rescaneo redundante.
+  - Indicador visual dinámico en la cabecera del editor mostrando el nombre de destino resultante en tiempo real.
+
+### Corregido & Anti-Slop UI Polish
+- **Erradicación de Saltos de Línea y Partición de Palabras en Botones**: Corrección anatómica de la barra inferior de `SongEditorScreen` (`Previsualizar` y `Guardar Archivo`) fijando altura estándar de 48.dp, `singleLine = true`, `softWrap = false` y elipsis controlada, eliminando los quiebres anómalos de texto.
+- **Simetría y Balance de Botones de Identificación**: Unificación de dimensiones y etiquetas en los botones de Gemini bajo la carátula (`Por Carátula` / `Por Metadatos` y `Por Audio`), garantizando alineación limpia a una sola línea.
+- **Distribución de Columnas en Formulario de Etiquetas**: Rebalanceo del ancho asignado a la fila de `Año` y `Género` (peso 0.35f para Año y 0.65f para Género), erradicando el truncamiento del texto de géneros musicales complejos.
+- **Prevención de Truncamiento de Chips en Biblioteca**: Aplicación de `maxLines = 1` y `softWrap = false` en la fila de filtros de `LibraryScreen`, evitando el recorte del chip `Incompletas`.
+- **Mitigación de Ruido Cromático (Candy Colors)**: Armonización de los estados de insignia en `TrackCard` con los tonos de superficie de Material Design 3 en lugar de colores saturados discordantes.
+
+---
+
 ## [1.3.1] - 2026-11-12
 
 ### Añadido

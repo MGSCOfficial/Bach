@@ -7,6 +7,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -35,6 +36,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.storage.AccentColorPreset
 import com.example.data.storage.ThemeMode
 import com.example.ui.theme.*
+import com.example.ui.util.FileRenameHelper
 import com.example.ui.viewmodel.MusicViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -684,6 +686,160 @@ fun SettingsScreen(
                 }
             }
 
+            // ==================== SECCIÓN 5B: ORGANIZACIÓN Y RENOMBRADO ====================
+            SettingsSectionHeader(title = "Renombrado de Archivos", icon = Icons.Default.Edit, tint = accent)
+
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = CardDefaults.outlinedCardBorder().copy(
+                    brush = SolidColor(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+                )
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    SettingsSwitchRow(
+                        title = "Renombrar archivos según etiquetas",
+                        subtitle = "Actualiza automáticamente el nombre del archivo al guardar los cambios en el editor",
+                        checked = settings.autoRenameFile,
+                        accentColor = accent,
+                        onCheckedChange = { viewModel.updateAutoRenameFile(it) }
+                    )
+
+                    if (settings.autoRenameFile) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = "Patrón de renombrado",
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        OutlinedTextField(
+                            value = settings.fileRenamePattern,
+                            onValueChange = { viewModel.updateFileRenamePattern(it) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            textStyle = TextStyle(fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "Variables rápidas (toca para insertar):",
+                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            val tokens = listOf("%artist%", "%title%", "%album%", "%track%", "%year%")
+                            tokens.forEach { token ->
+                                SuggestionChip(
+                                    onClick = {
+                                        viewModel.updateFileRenamePattern("${settings.fileRenamePattern} $token".trim())
+                                    },
+                                    label = { Text(token, fontSize = 11.sp) }
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        val sampleTrack = remember {
+                            com.example.data.model.AudioTrack(
+                                id = "sample",
+                                fileUri = "",
+                                fileName = "audio.mp3",
+                                title = "Starboy",
+                                artist = "The Weeknd",
+                                album = "Starboy",
+                                trackNumber = "01",
+                                year = "2016",
+                                format = com.example.data.model.AudioFormat.MP3
+                            )
+                        }
+                        val sampleName = remember(settings.fileRenamePattern) {
+                            FileRenameHelper.resolvePattern(settings.fileRenamePattern, sampleTrack) + ".mp3"
+                        }
+                        Text(
+                            text = "Vista previa: $sampleName",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = accent,
+                                fontWeight = FontWeight.Medium
+                            )
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ==================== SECCIÓN 5C: TAMAÑO DE CARÁTULA POR DEFECTO ====================
+            SettingsSectionHeader(title = "Resolución de Carátula", icon = Icons.Default.Image, tint = accent)
+
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = CardDefaults.outlinedCardBorder().copy(
+                    brush = SolidColor(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+                )
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text(
+                        text = "Tamaño predeterminado al incrustar:",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    )
+                    Text(
+                        text = "Redimensiona la imagen para optimizar el peso del archivo de audio",
+                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val sizes = listOf(
+                            0 to "Original",
+                            1000 to "1000 px",
+                            960 to "960 px",
+                            600 to "600 px",
+                            500 to "500 px",
+                            250 to "250 px"
+                        )
+                        sizes.forEach { (size, label) ->
+                            val isSelected = settings.targetCoverSizePx == size
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { viewModel.updateDefaultCoverSize(size) },
+                                label = { Text(label, fontSize = 12.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = accent.copy(alpha = 0.2f),
+                                    selectedLabelColor = accent
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             // ==================== SECCIÓN 6: ACERCA DE ====================
             SettingsSectionHeader(title = "Acerca de la Aplicación", icon = Icons.Default.Info, tint = accent)
 
@@ -726,7 +882,7 @@ fun SettingsScreen(
                             )
                         )
                         Text(
-                            text = "Versión 1.2.0 • Edición Pro con Multi-fuente y Material You",
+                            text = "Versión 1.4.0 • Edición Pro con Multi-fuente y Material You",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

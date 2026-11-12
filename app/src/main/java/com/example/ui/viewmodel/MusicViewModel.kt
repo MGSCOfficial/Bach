@@ -21,6 +21,7 @@ import com.example.data.tagger.AudioTagReader
 import com.example.data.tagger.AudioTagWriter
 import com.example.player.AudioPreviewPlayer
 import com.example.ui.util.AudioThumbnailLoader
+import com.example.ui.util.FileRenameHelper
 import com.example.ui.util.GeminiPromptHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -59,6 +60,7 @@ data class EditorUiState(
     val selectedCandidate: OnlineCandidate? = null,
     val coverArtOptions: List<CoverArtOption> = emptyList(),
     val selectedCoverOption: CoverArtOption? = null,
+    val selectedTargetCoverSize: Int = 0,
     val isLoadingCovers: Boolean = false,
     val isSearchingLyrics: Boolean = false,
     val lyricsCandidates: List<LyricsResult> = emptyList(),
@@ -196,6 +198,25 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
         settingsManager.setFoldersLayoutMode(newMode)
         _settings.update { it.copy(foldersLayoutMode = newMode) }
+    }
+
+    fun updateAutoRenameFile(enabled: Boolean) {
+        settingsManager.setAutoRenameFile(enabled)
+        _settings.update { it.copy(autoRenameFile = enabled) }
+    }
+
+    fun updateFileRenamePattern(pattern: String) {
+        settingsManager.setFileRenamePattern(pattern)
+        _settings.update { it.copy(fileRenamePattern = pattern) }
+    }
+
+    fun updateDefaultCoverSize(sizePx: Int) {
+        settingsManager.setTargetCoverSizePx(sizePx)
+        _settings.update { it.copy(targetCoverSizePx = sizePx) }
+    }
+
+    fun updateTargetCoverSize(sizePx: Int) {
+        _editorState.update { it.copy(selectedTargetCoverSize = sizePx) }
     }
 
     init {
@@ -804,6 +825,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val coverOption = _editorState.value.selectedCoverOption
         val saveLrc = _editorState.value.saveLrcFile
         val embedLyrics = _editorState.value.embedLyrics
+        val targetCoverDimension = if (_editorState.value.selectedTargetCoverSize > 0) {
+            _editorState.value.selectedTargetCoverSize
+        } else {
+            _settings.value.targetCoverSizePx
+        }
 
         viewModelScope.launch(Dispatchers.IO) {
             _editorState.update { it.copy(isSaving = true) }
@@ -826,7 +852,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 track = original,
                 updatedTrack = draft,
                 coverBytes = coverBytes,
-                lyricsText = lyricsToEmbed
+                lyricsText = lyricsToEmbed,
+                targetCoverDimensionPx = targetCoverDimension
             )
 
             // 2. Save .lrc file in folder if requested and valid lyrics exist
@@ -839,7 +866,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
             if (success) {
                 val lyricsActuallySaved = (embedLyrics || saveLrc) && hasValidLyrics
-                val updatedTrack = draft.copy(
+                var updatedTrack = draft.copy(
                     hasCover = coverBytes != null && coverBytes.isNotEmpty(),
                     coverArtBytes = coverBytes,
                     lyrics = if (lyricsActuallySaved) cleanLyrics else "",
@@ -847,8 +874,24 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     dateModified = System.currentTimeMillis()
                 )
 
+                // 2b. Auto-rename file if enabled
+                val shouldRename = _settings.value.autoRenameFile
+                if (shouldRename) {
+                    val ext = original.fileName.substringAfterLast(".", "")
+                    val extSuffix = if (ext.isNotBlank()) ".$ext" else ""
+                    val newBaseName = FileRenameHelper.resolvePattern(_settings.value.fileRenamePattern, updatedTrack)
+                    val newFileName = "$newBaseName$extSuffix"
+                    val (renamed, renamedTrack) = folderManager.renameTrackFile(updatedTrack, newFileName)
+                    if (renamed) {
+                        updatedTrack = renamedTrack
+                    }
+                }
+
                 // Invalidate cached thumbnail for this track
                 AudioThumbnailLoader.invalidate(original.fileUri)
+                if (updatedTrack.fileUri != original.fileUri) {
+                    AudioThumbnailLoader.invalidate(updatedTrack.fileUri)
+                }
 
                 // 3. Atomically update ONLY this track in memory and in cache (NO FULL RESCAN!)
                 folderManager.updateSingleTrackInCache(updatedTrack)
@@ -865,7 +908,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                             state.searchQuery,
                             state.sortOrder
                         ),
-                        statusMessage = "¡Guardado exitosamente en ${original.fileName}!"
+                        statusMessage = "¡Guardado exitosamente en ${updatedTrack.fileName}!"
                     )
                 }
 

@@ -458,6 +458,71 @@ class FolderManager(private val context: Context) {
         return false
     }
 
+    fun renameTrackFile(track: AudioTrack, newFileNameWithExt: String): Pair<Boolean, AudioTrack> {
+        val sanitizedNewName = sanitizeFileName(newFileNameWithExt)
+        if (sanitizedNewName.isBlank() || sanitizedNewName == track.fileName) {
+            return false to track
+        }
+
+        val uri = Uri.parse(track.fileUri)
+        try {
+            if (uri.scheme == "file") {
+                val origFile = File(uri.path ?: return false to track)
+                val destFile = File(origFile.parentFile, sanitizedNewName)
+                if (origFile.renameTo(destFile)) {
+                    val baseName = track.fileName.substringBeforeLast(".")
+                    val newBaseName = sanitizedNewName.substringBeforeLast(".")
+                    val origLrc = File(origFile.parentFile, "$baseName.lrc")
+                    if (origLrc.exists()) {
+                        origLrc.renameTo(File(origFile.parentFile, "$newBaseName.lrc"))
+                    }
+
+                    val updated = track.copy(
+                        fileName = sanitizedNewName,
+                        fileUri = destFile.toURI().toString()
+                    )
+                    updateSingleTrackInCache(updated)
+                    return true to updated
+                }
+            } else {
+                val doc = DocumentFile.fromSingleUri(context, uri)
+                if (doc != null && doc.renameTo(sanitizedNewName)) {
+                    val newUriStr = doc.uri.toString()
+
+                    track.parentFolderUri?.let { parentUriStr ->
+                        try {
+                            val parentDoc = DocumentFile.fromTreeUri(context, Uri.parse(parentUriStr))
+                                ?: DocumentFile.fromSingleUri(context, Uri.parse(parentUriStr))
+                            val baseName = track.fileName.substringBeforeLast(".")
+                            val newBaseName = sanitizedNewName.substringBeforeLast(".")
+                            val lrcDoc = parentDoc?.findFile("$baseName.lrc")
+                            lrcDoc?.renameTo("$newBaseName.lrc")
+                        } catch (e: Exception) {
+                            Log.w("FolderManager", "Could not rename companion .lrc file", e)
+                        }
+                    }
+
+                    val updated = track.copy(
+                        fileName = sanitizedNewName,
+                        fileUri = newUriStr
+                    )
+                    updateSingleTrackInCache(updated)
+                    return true to updated
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("FolderManager", "Error renaming track file: ${track.fileName} to $sanitizedNewName", e)
+        }
+        return false to track
+    }
+
+    private fun sanitizeFileName(name: String): String {
+        return name
+            .replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+    }
+
     private data class AudioFileInfo(
         val uri: Uri,
         val docId: String,

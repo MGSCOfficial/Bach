@@ -5,6 +5,8 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -47,6 +49,8 @@ fun CoverArtPickerSheet(
     onSelectOption: (CoverArtOption) -> Unit,
     onCustomImagePicked: (ByteArray) -> Unit,
     onDismiss: () -> Unit,
+    selectedTargetSize: Int = 0,
+    onTargetSizeSelected: (Int) -> Unit = {},
     isAmoled: Boolean = false
 ) {
     val context = LocalContext.current
@@ -132,7 +136,47 @@ fun CoverArtPickerSheet(
                 Text("Seleccionar imagen desde el dispositivo", fontWeight = FontWeight.SemiBold, color = accent)
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Resolution / Resize Chips
+            Text(
+                text = "Resolución de guardado:",
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val sizeOptions = listOf(
+                    0 to "Original",
+                    1000 to "1000 px",
+                    960 to "960 px",
+                    600 to "600 px",
+                    500 to "500 px",
+                    250 to "250 px"
+                )
+                sizeOptions.forEach { (size, label) ->
+                    val isSelected = selectedTargetSize == size
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { onTargetSizeSelected(size) },
+                        label = { Text(label, fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = accent.copy(alpha = 0.2f),
+                            selectedLabelColor = accent
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
 
             if (isLoading) {
                 Box(

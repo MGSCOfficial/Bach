@@ -1,6 +1,8 @@
 package com.example.data.tagger
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import com.example.data.model.AudioFormat
@@ -14,6 +16,36 @@ import java.nio.ByteOrder
 object AudioTagWriter {
 
     /**
+     * Resizes cover art image bytes to a bounding box targetDimensionPx while preserving aspect ratio.
+     */
+    fun resizeCoverArt(bytes: ByteArray, targetDimensionPx: Int, quality: Int = 90): ByteArray {
+        if (targetDimensionPx <= 0 || bytes.isEmpty()) return bytes
+        return try {
+            val originalBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return bytes
+            val width = originalBitmap.width
+            val height = originalBitmap.height
+            if (width <= targetDimensionPx && height <= targetDimensionPx) {
+                return bytes
+            }
+
+            val ratio = width.toFloat() / height.toFloat()
+            val (newWidth, newHeight) = if (ratio > 1f) {
+                targetDimensionPx to (targetDimensionPx / ratio).toInt().coerceAtLeast(1)
+            } else {
+                (targetDimensionPx * ratio).toInt().coerceAtLeast(1) to targetDimensionPx
+            }
+
+            val scaledBitmap = Bitmap.createScaledBitmap(originalBitmap, newWidth, newHeight, true)
+            val baos = ByteArrayOutputStream()
+            scaledBitmap.compress(Bitmap.CompressFormat.JPEG, quality, baos)
+            baos.toByteArray()
+        } catch (e: Exception) {
+            Log.w("AudioTagWriter", "Failed to resize cover art", e)
+            bytes
+        }
+    }
+
+    /**
      * Writes updated ID3v2 tags or MP4 atoms directly to the actual audio file on storage
      * using the ContentResolver stream for SAF documents or standard File for local paths.
      */
@@ -22,10 +54,17 @@ object AudioTagWriter {
         track: AudioTrack,
         updatedTrack: AudioTrack,
         coverBytes: ByteArray?,
-        lyricsText: String? = null
+        lyricsText: String? = null,
+        targetCoverDimensionPx: Int = 0
     ): Boolean {
         return try {
             val uri = Uri.parse(track.fileUri)
+
+            val processedCoverBytes = if (coverBytes != null && targetCoverDimensionPx > 0) {
+                resizeCoverArt(coverBytes, targetCoverDimensionPx)
+            } else {
+                coverBytes
+            }
 
             // Read original source bytes
             val sourceBytes: ByteArray = if (uri.scheme == "file") {
@@ -37,8 +76,8 @@ object AudioTagWriter {
 
             // Encode tags
             val finalBytes = when (updatedTrack.format) {
-                AudioFormat.MP3 -> writeMp3Tags(sourceBytes, updatedTrack, coverBytes, lyricsText)
-                AudioFormat.M4A -> writeM4aTags(sourceBytes, updatedTrack, coverBytes, lyricsText)
+                AudioFormat.MP3 -> writeMp3Tags(sourceBytes, updatedTrack, processedCoverBytes, lyricsText)
+                AudioFormat.M4A -> writeM4aTags(sourceBytes, updatedTrack, processedCoverBytes, lyricsText)
             }
 
             // Write directly to user's real file

@@ -63,7 +63,14 @@ data class AppSettings(
     // Google Gemini AI
     val geminiEnabled: Boolean = false,
     val geminiApiKey: String = "",
-    val geminiModel: String = "gemini-3.5-flash-lite"
+    val geminiModel: String = "gemini-3.5-flash-lite",
+
+    // File Renaming
+    val autoRenameFile: Boolean = false,
+    val fileRenamePattern: String = "%artist% - %title%",
+
+    // Cover Art Resizing (0 = Original / No resize)
+    val targetCoverSizePx: Int = 0
 )
 
 class SettingsManager(context: Context) {
@@ -111,6 +118,13 @@ class SettingsManager(context: Context) {
         // Layout Modes
         private const val KEY_SONGS_LAYOUT_MODE = "pref_songs_layout_mode"
         private const val KEY_FOLDERS_LAYOUT_MODE = "pref_folders_layout_mode"
+
+        // File Renaming
+        private const val KEY_AUTO_RENAME_FILE = "pref_auto_rename_file"
+        private const val KEY_FILE_RENAME_PATTERN = "pref_file_rename_pattern"
+
+        // Cover Resizing
+        private const val KEY_TARGET_COVER_SIZE = "pref_target_cover_size"
     }
 
     fun loadSettings(): AppSettings {
@@ -181,7 +195,11 @@ class SettingsManager(context: Context) {
             foldersLayoutMode = run {
                 val modeStr = prefs.getString(KEY_FOLDERS_LAYOUT_MODE, ViewLayoutMode.LIST.name) ?: ViewLayoutMode.LIST.name
                 try { ViewLayoutMode.valueOf(modeStr) } catch (e: Exception) { ViewLayoutMode.LIST }
-            }
+            },
+
+            autoRenameFile = prefs.getBoolean(KEY_AUTO_RENAME_FILE, false),
+            fileRenamePattern = prefs.getString(KEY_FILE_RENAME_PATTERN, "%artist% - %title%") ?: "%artist% - %title%",
+            targetCoverSizePx = prefs.getInt(KEY_TARGET_COVER_SIZE, 0)
         )
     }
 
@@ -264,5 +282,17 @@ class SettingsManager(context: Context) {
 
     fun setFoldersLayoutMode(mode: ViewLayoutMode) {
         prefs.edit().putString(KEY_FOLDERS_LAYOUT_MODE, mode.name).apply()
+    }
+
+    fun setAutoRenameFile(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_RENAME_FILE, enabled).apply()
+    }
+
+    fun setFileRenamePattern(pattern: String) {
+        prefs.edit().putString(KEY_FILE_RENAME_PATTERN, pattern.trim()).apply()
+    }
+
+    fun setTargetCoverSizePx(size: Int) {
+        prefs.edit().putInt(KEY_TARGET_COVER_SIZE, size).apply()
     }
 }

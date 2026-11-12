@@ -326,7 +326,9 @@ fun LibraryScreen(
                                 text = labelText,
                                 color = if (isSelected) Color.Black else MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 11.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }

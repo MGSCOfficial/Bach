@@ -27,6 +27,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -39,6 +40,7 @@ import com.example.ui.components.LyricsPickerSheet
 import com.example.ui.components.OnlineSearchResultsSheet
 import com.example.ui.components.PreviewDiffDialog
 import com.example.ui.theme.*
+import com.example.ui.util.FileRenameHelper
 import com.example.ui.viewmodel.MusicViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -111,7 +113,8 @@ fun SongEditorScreen(
                         Text(
                             text = draft.fileName,
                             style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 },
@@ -174,32 +177,56 @@ fun SongEditorScreen(
                             .height(48.dp)
                             .testTag("btn_preview_diff"),
                         shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = accent),
                         border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(accent))
                     ) {
                         Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Previsualizar", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            text = "Previsualizar",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
 
                     Button(
                         onClick = { viewModel.applyAndSaveTags() },
                         modifier = Modifier
-                            .weight(1.3f)
+                            .weight(1.1f)
                             .height(48.dp)
                             .testTag("btn_save_tags"),
                         shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = accent),
                         enabled = !editorState.isSaving
                     ) {
                         if (editorState.isSaving) {
-                            CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Guardando...", color = Color.Black, fontWeight = FontWeight.Bold)
+                            CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Guardando...",
+                                color = Color.Black,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         } else {
                             Icon(Icons.Default.Save, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Guardar en Archivo", color = Color.Black, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = "Guardar Archivo",
+                                color = Color.Black,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
                 }
@@ -214,6 +241,51 @@ fun SongEditorScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
+            // ==================== AUTO-RENAME STATUS BANNER ====================
+            if (settings.autoRenameFile) {
+                val ext = draft.fileName.substringAfterLast(".", "")
+                val extSuffix = if (ext.isNotBlank()) ".$ext" else ""
+                val targetFileName = remember(draft.title, draft.artist, draft.album, draft.trackNumber, draft.year, settings.fileRenamePattern) {
+                    FileRenameHelper.resolvePattern(settings.fileRenamePattern, draft) + extSuffix
+                }
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = cardVariantBg,
+                    border = BorderStroke(1.dp, accent.copy(alpha = 0.35f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = null,
+                            tint = accent,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Renombrado activo al guardar:",
+                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            )
+                            Text(
+                                text = targetFileName,
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+
             // ==================== ALBUM ART HERO CARD ====================
             Card(
                 modifier = Modifier
@@ -320,20 +392,21 @@ fun SongEditorScreen(
                             colors = ButtonDefaults.outlinedButtonColors(
                                 containerColor = VioletAccent.copy(alpha = 0.12f)
                             ),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                             modifier = Modifier
                                 .weight(1f)
+                                .height(42.dp)
                                 .testTag("btn_gemini_cover_ocr")
                         ) {
                             if (editorState.isGeminiLoading && !editorState.isGeminiSyncingLyrics) {
                                 CircularProgressIndicator(color = VioletAccent, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Analizando...", color = VioletAccent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Analizando...", color = VioletAccent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
                             } else {
                                 Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = VioletAccent, modifier = Modifier.size(14.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                val label = if (hasCoverBytes) "Carátula" else "Metadatos"
-                                Text("Identificar ($label)", color = VioletAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                val label = if (hasCoverBytes) "Por Carátula" else "Por Metadatos"
+                                Text(label, color = VioletAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                             }
                         }
 
@@ -345,14 +418,15 @@ fun SongEditorScreen(
                             colors = ButtonDefaults.outlinedButtonColors(
                                 containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
                             ),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                             modifier = Modifier
                                 .weight(1f)
+                                .height(42.dp)
                                 .testTag("btn_gemini_audio_id")
                         ) {
                             Icon(Icons.Default.GraphicEq, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Por Audio", color = MaterialTheme.colorScheme.onTertiaryContainer, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("Por Audio", color = MaterialTheme.colorScheme.onTertiaryContainer, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                         }
                     }
                 }
@@ -856,7 +930,7 @@ fun SongEditorScreen(
                     onValueChange = { viewModel.updateDraftField(year = it) },
                     icon = Icons.Default.CalendarToday,
                     isAmoled = isAmoled,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(0.35f),
                     testTag = "input_year"
                 )
 
@@ -866,7 +940,7 @@ fun SongEditorScreen(
                     onValueChange = { viewModel.updateDraftField(genre = it) },
                     icon = Icons.Default.Category,
                     isAmoled = isAmoled,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(0.65f),
                     testTag = "input_genre"
                 )
             }
@@ -945,6 +1019,8 @@ fun SongEditorScreen(
             options = editorState.coverArtOptions,
             selectedOption = editorState.selectedCoverOption,
             isLoading = editorState.isLoadingCovers,
+            selectedTargetSize = if (editorState.selectedTargetCoverSize > 0) editorState.selectedTargetCoverSize else settings.targetCoverSizePx,
+            onTargetSizeSelected = { size -> viewModel.updateTargetCoverSize(size) },
             onSelectOption = { opt -> viewModel.selectCoverOption(opt) },
             onCustomImagePicked = { bytes -> viewModel.setCustomCoverFromBytes(bytes) },
             onDismiss = { viewModel.hideCoverPickerSheet() },
