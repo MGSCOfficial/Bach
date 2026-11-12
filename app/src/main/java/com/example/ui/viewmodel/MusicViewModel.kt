@@ -73,6 +73,7 @@ data class EditorUiState(
     val saveNotification: String? = null,
     val isGeminiLoading: Boolean = false,
     val isGeminiSyncingLyrics: Boolean = false,
+    val isGeminiTranscribing: Boolean = false,
     val geminiStatusMessage: String? = null
 )
 
@@ -1132,6 +1133,73 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                             isGeminiSyncingLyrics = false,
                             geminiStatusMessage = null,
                             saveNotification = "Error Gemini: ${err.localizedMessage ?: "No se pudo sincronizar la letra"}"
+                        )
+                    }
+                )
+            }
+        }
+    }
+
+    fun transcribeLyricsFromAudioWithGemini(context: Context) {
+        val draft = _editorState.value.draftTrack ?: return
+        val s = _settings.value
+
+        if (!s.geminiEnabled || s.geminiApiKey.isBlank()) {
+            Toast.makeText(context, "Configura tu clave de Gemini en Ajustes", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        viewModelScope.launch {
+            _editorState.update {
+                it.copy(
+                    isGeminiTranscribing = true,
+                    geminiStatusMessage = "Escuchando y transcribiendo audio con Gemini AI..."
+                )
+            }
+
+            val audioBytes = readTrackAudioBytes(context, draft.fileUri)
+            if (audioBytes == null || audioBytes.isEmpty()) {
+                _editorState.update {
+                    it.copy(
+                        isGeminiTranscribing = false,
+                        geminiStatusMessage = null,
+                        saveNotification = "No se pudo leer el archivo de audio para transcribir."
+                    )
+                }
+                return@launch
+            }
+
+            val mime = if (draft.format == AudioFormat.MP3) "audio/mp3" else "audio/mp4"
+            val title = draft.title.ifBlank { draft.fileName.substringBeforeLast(".") }
+            val result = geminiRepo.transcribeLyricsFromAudio(
+                audioBytes = audioBytes,
+                audioMimeType = mime,
+                hintTitle = title,
+                hintArtist = draft.artist,
+                apiKey = s.geminiApiKey,
+                model = s.geminiModel
+            )
+
+            _editorState.update { state ->
+                val curDraft = state.draftTrack ?: return@update state
+                result.fold(
+                    onSuccess = { lyricsRes ->
+                        val chosen = lyricsRes.bestLyrics.trim()
+                        state.copy(
+                            isGeminiTranscribing = false,
+                            geminiStatusMessage = null,
+                            draftTrack = curDraft.copy(
+                                lyrics = chosen,
+                                hasLyrics = chosen.isNotBlank()
+                            ),
+                            saveNotification = "Letra transcrita desde audio con Gemini (${lyricsRes.source})"
+                        )
+                    },
+                    onFailure = { err ->
+                        state.copy(
+                            isGeminiTranscribing = false,
+                            geminiStatusMessage = null,
+                            saveNotification = "Error Gemini: ${err.localizedMessage ?: "No se pudo transcribir el audio"}"
                         )
                     }
                 )

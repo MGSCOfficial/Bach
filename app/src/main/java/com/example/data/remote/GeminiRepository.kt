@@ -297,6 +297,7 @@ class GeminiRepository(
 
                     val genConfig = JSONObject().apply {
                         put("temperature", 0.2)
+                        put("maxOutputTokens", 4096)
                     }
                     put("generationConfig", genConfig)
                 }
@@ -426,19 +427,39 @@ class GeminiRepository(
                 val root = JSONObject(body)
                 val arr = root.optJSONArray("models") ?: JSONArray()
                 val list = mutableListOf<GeminiModelOption>()
+                val excludedKeywords = listOf(
+                    "image", "banana", "tts", "transcribe", "robotics",
+                    "lyria", "omni", "computer-use", "deep-research", "customtools"
+                )
                 for (i in 0 until arr.length()) {
                     val m = arr.getJSONObject(i)
                     val rawName = m.optString("name", "")
                     val modelId = rawName.removePrefix("models/")
-                    val displayName = m.optString("displayName", modelId)
                     val methods = m.optJSONArray("supportedGenerationMethods")
                     val supportsGen = methods?.let { mArr ->
                         (0 until mArr.length()).any { mArr.optString(it) == "generateContent" }
                     } ?: false
 
-                    if (supportsGen && (modelId.contains("flash", ignoreCase = true) || modelId.contains("pro", ignoreCase = true))) {
-                        list.add(GeminiModelOption(id = modelId, displayName = displayName))
+                    if (!supportsGen) continue
+                    if (!modelId.startsWith("gemini-", ignoreCase = true)) continue
+                    if (!modelId.contains("flash", ignoreCase = true) && !modelId.contains("pro", ignoreCase = true)) continue
+
+                    val isExcluded = excludedKeywords.any { ex ->
+                        modelId.contains(ex, ignoreCase = true) || m.optString("displayName", "").contains(ex, ignoreCase = true)
                     }
+                    if (isExcluded) continue
+
+                    val cleanDisplayName = when (modelId) {
+                        "gemini-3.5-flash-lite" -> "Gemini 3.5 Flash Lite (Recomendado)"
+                        "gemini-3.5-flash" -> "Gemini 3.5 Flash (Alta Fidelidad)"
+                        "gemini-3.8-flash" -> "Gemini 3.8 Flash (Alta Demanda)"
+                        "gemini-2.5-flash" -> "Gemini 2.5 Flash"
+                        "gemini-2.5-pro" -> "Gemini 2.5 Pro"
+                        "gemini-3.1-flash-lite" -> "Gemini 3.1 Flash Lite"
+                        else -> m.optString("displayName", modelId).ifBlank { modelId }
+                    }
+
+                    list.add(GeminiModelOption(id = modelId, displayName = cleanDisplayName))
                 }
                 val sorted = list.sortedBy { opt ->
                     when {
@@ -602,6 +623,100 @@ class GeminiRepository(
             Result.success(result)
         } catch (e: Exception) {
             Log.e(TAG, "Error en synchronizeLyricsWithAudio", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun transcribeLyricsFromAudio(
+        audioBytes: ByteArray,
+        audioMimeType: String,
+        hintTitle: String = "",
+        hintArtist: String = "",
+        apiKey: String,
+        model: String = "gemini-3.5-flash-lite"
+    ): Result<LyricsResult> = withContext(Dispatchers.IO) {
+        if (apiKey.isBlank()) {
+            return@withContext Result.failure(IllegalArgumentException("Clave API de Gemini no configurada."))
+        }
+        if (audioBytes.isEmpty()) {
+            return@withContext Result.failure(IllegalArgumentException("El archivo de audio está vacío."))
+        }
+
+        val prompt = buildString {
+            append("Eres un transcriptor musical profesional y perito en reconocimiento fonético.\n")
+            append("Escucha atentamente el audio adjunto de la pista musical.\n")
+            if (hintTitle.isNotBlank() || hintArtist.isNotBlank()) {
+                append("Pista tentativa en el archivo: \"$hintTitle\" interpretada por \"$hintArtist\".\n")
+            }
+            append("INSTRUCCIONES OBLIGATORIAS:\n")
+            append("1. Escucha la voz REAL grabada en esta pista de audio y transcribe fielmente cada palabra y verso que canta el vocalista en ESTA versión específica.\n")
+            append("2. Si la pista es un cover, reversión cómica, parodia o versión en vivo (por ejemplo interpretada por Tenacious D, Jack Black, o similar), NO utilices la letra de la versión original de otro artista (como Britney Spears). Transcribe con precisión las frases exactas, cambios líricos, variaciones, gritos y ad-libs presentes en el audio.\n")
+            append("3. Transcribe la canción COMPLETA de principio a fin, sin detenerte ni resumir partes intermedias.\n")
+            append("4. Si logras discernir los tiempos con claridad, devuelve la letra en formato LRC sincronizado con marcas exactas [mm:ss.xx] al inicio de cada verso. Si no, en texto estructurado por estrofas.\n")
+            append("5. REGLA ESTRICTA: Devuelve ÚNICAMENTE las líneas líricas de la canción, sin introducciones, notas ni bloques markdown (```).")
+        }
+
+        try {
+            val (responseBody, usedModel) = executeWithModelCascade(model, apiKey) {
+                val requestJson = JSONObject().apply {
+                    val contentsArray = JSONArray().apply {
+                        val contentObj = JSONObject().apply {
+                            val partsArray = JSONArray().apply {
+                                put(JSONObject().apply { put("text", prompt) })
+                                put(JSONObject().apply {
+                                    put("inlineData", JSONObject().apply {
+                                        put("mimeType", audioMimeType)
+                                        put("data", Base64.encodeToString(audioBytes, Base64.NO_WRAP))
+                                    })
+                                })
+                            }
+                            put("parts", partsArray)
+                        }
+                        put(contentObj)
+                    }
+                    put("contents", contentsArray)
+
+                    val genConfig = JSONObject().apply {
+                        put("temperature", 0.1)
+                        put("maxOutputTokens", 4096)
+                    }
+                    put("generationConfig", genConfig)
+                }
+                requestJson.toString()
+            }
+
+            val rawText = extractCandidateText(responseBody)
+            val cleanedText = rawText
+                .replace(Regex("^```[a-zA-Z]*\\s*\\n?"), "")
+                .replace(Regex("\\n?\\s*```$"), "")
+                .trim()
+
+            if (cleanedText.isBlank()) {
+                return@withContext Result.failure(Exception("Gemini no pudo transcribir la voz del audio."))
+            }
+
+            val isSynced = cleanedText.contains(Regex("\\[\\d{2}:\\d{2}"))
+            val lyricsResult = if (isSynced) {
+                LyricsResult(
+                    trackName = hintTitle,
+                    artistName = hintArtist,
+                    plainLyrics = null,
+                    syncedLyrics = cleanedText,
+                    source = "Transcripción de Audio • Gemini ($usedModel)"
+                )
+            } else {
+                LyricsResult(
+                    trackName = hintTitle,
+                    artistName = hintArtist,
+                    plainLyrics = cleanedText,
+                    syncedLyrics = null,
+                    source = "Transcripción de Audio • Gemini ($usedModel)"
+                )
+            }
+
+            Result.success(lyricsResult)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error en transcribeLyricsFromAudio", e)
             Result.failure(e)
         }
     }

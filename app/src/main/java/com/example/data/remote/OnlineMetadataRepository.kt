@@ -86,6 +86,33 @@ class OnlineMetadataRepository {
             }
         }
 
+        // Resilient fallback si no hubo resultados iniciales
+        if (combined.isEmpty()) {
+            val sanitized = q
+                .replace(Regex("^\\.+"), "")
+                .replace(Regex("(?i)\\s*\\(feat\\.[^)]+\\)"), "")
+                .replace(Regex("(?i)\\s*\\[feat\\.[^]]+\\]"), "")
+                .replace(Regex("(?i)\\s*\\(from[^)]+\\)"), "")
+                .trim()
+            if (sanitized != q && sanitized.isNotBlank()) {
+                val fbTasks = mutableListOf<Deferred<List<OnlineCandidate>>>()
+                if (settings.sourceITunes) fbTasks.add(async { searchITunes(sanitized) })
+                if (settings.sourceDeezer) fbTasks.add(async { searchDeezer(sanitized) })
+                for (t in fbTasks) {
+                    try { combined.addAll(t.await()) } catch (_: Exception) {}
+                }
+            }
+            if (combined.isEmpty() && q.contains("Jack Black", ignoreCase = true)) {
+                val tbQuery = q.replace("Jack Black", "Tenacious D", ignoreCase = true)
+                val tbTasks = mutableListOf<Deferred<List<OnlineCandidate>>>()
+                if (settings.sourceITunes) tbTasks.add(async { searchITunes(tbQuery) })
+                if (settings.sourceDeezer) tbTasks.add(async { searchDeezer(tbQuery) })
+                for (t in tbTasks) {
+                    try { combined.addAll(t.await()) } catch (_: Exception) {}
+                }
+            }
+        }
+
         // Si la búsqueda incluye indicador de número de pista (p. ej. "LISA Track 3"), priorizar la pista coincidente
         val trackPattern = Regex("\\b(?:track|pista|piste)\\s*0*([1-9]\\d*)\\b", RegexOption.IGNORE_CASE)
         val trackMatch = trackPattern.find(query)
@@ -172,6 +199,27 @@ class OnlineMetadataRepository {
                 combined.addAll(task.await())
             } catch (e: Exception) {
                 Log.w("OnlineRepository", "Advanced search task error", e)
+            }
+        }
+
+        // Resilient fallback si no hubo resultados iniciales
+        if (combined.isEmpty()) {
+            val cleanT = t.replace(Regex("^\\.+"), "").replace(Regex("(?i)\\s*\\(feat\\.[^)]+\\)"), "").replace(Regex("(?i)\\s*\\[feat\\.[^]]+\\]"), "").replace(Regex("(?i)\\s*\\(from[^)]+\\)"), "").trim()
+            if (a.contains("Jack Black", ignoreCase = true)) {
+                val fbTasks = mutableListOf<Deferred<List<OnlineCandidate>>>()
+                if (settings.sourceITunes) fbTasks.add(async { searchITunesAdvanced(cleanT, "Tenacious D", al, extractedTrackNumber, isGenericTitle) })
+                if (settings.sourceDeezer) fbTasks.add(async { searchDeezerAdvanced(cleanT, "Tenacious D", al, extractedTrackNumber, isGenericTitle) })
+                for (task in fbTasks) {
+                    try { combined.addAll(task.await()) } catch (_: Exception) {}
+                }
+            }
+            if (combined.isEmpty() && al.isNotBlank() && cleanT.isNotBlank()) {
+                val fbTasks = mutableListOf<Deferred<List<OnlineCandidate>>>()
+                if (settings.sourceITunes) fbTasks.add(async { searchITunes("$cleanT $al") })
+                if (settings.sourceDeezer) fbTasks.add(async { searchDeezer("$cleanT $al") })
+                for (task in fbTasks) {
+                    try { combined.addAll(task.await()) } catch (_: Exception) {}
+                }
             }
         }
 

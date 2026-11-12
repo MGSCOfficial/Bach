@@ -5,6 +5,19 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ---
 
+## [1.3.1] - 2026-11-12
+
+### Añadido
+- **Transcripción Acústica Directa con Gemini AI (`Transcribir Audio`)**: Nueva función multimodal en el editor que envía los bytes de audio codificados para que Gemini transcriba fonéticamente la pista de voz real grabada, capturando con exactitud covers, parodias y variaciones vocales sin alucinar la letra original de otro intérprete.
+- **Separación Clara de Acciones Líricas**: La tarjeta de letra ahora separa explícitamente `Buscar en LRCLIB` (búsqueda online con hojas de candidatos), `Transcribir Audio (Gemini)` (análisis del archivo sonoro), `Sincronizar Audio` (alineación a marcas temporales [mm:ss.xx]) y `Generar por Texto (IA)` (creación sintética a partir de etiquetas).
+
+### Corregido
+- **Saneamiento del Selector Dinámico de Modelos Gemini**: Filtro de exclusión estricto para eliminar modelos no aptos para visión y texto cotidiano como "Nano Banana" (generación de imágenes), "Gemini Omni" (edición de video), "Lyria 3" (generación musical), previsualizaciones TTS de audio y robótica, dejando exclusivamente variantes estables de Flash y Pro.
+- **Búsqueda Resiliente Multi-Query en LRCLIB, iTunes y Deezer**: Detección y fallback automático ante pistas complejas de bandas sonoras: sanitización de puntos suspensivos iniciales (ej. `...Baby One More Time`), remoción de corchetes/paréntesis `feat.`, búsqueda combinada de `pista + álbum` y resolución del alias de Jack Black hacia su banda oficial `Tenacious D`.
+- **Prevención de Truncamiento de Letras**: Parámetro `maxOutputTokens = 4096` garantizado en las peticiones líricas para evitar cortes o respuestas incompletas de Gemini.
+
+---
+
 ## [1.3.0] - 2026-11-11
 
 ### Añadido

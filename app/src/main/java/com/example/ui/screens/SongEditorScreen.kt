@@ -598,14 +598,14 @@ fun SongEditorScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Filas de acciones líricas: LRCLIB y Gemini equilibrados al 50%
+                    // Filas de acciones líricas: LRCLIB (Online) y Gemini (Transcribir Audio)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Button(
                             onClick = { viewModel.searchLyricsForCurrentTrack() },
-                            enabled = !editorState.isSearchingLyrics && !editorState.isGeminiLoading,
+                            enabled = !editorState.isSearchingLyrics && !editorState.isGeminiLoading && !editorState.isGeminiTranscribing,
                             colors = ButtonDefaults.buttonColors(containerColor = accent),
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier
@@ -625,54 +625,81 @@ fun SongEditorScreen(
                         }
 
                         Button(
-                            onClick = { viewModel.fetchLyricsWithGemini(context) },
-                            enabled = !editorState.isGeminiLoading && !editorState.isSearchingLyrics,
+                            onClick = { viewModel.transcribeLyricsFromAudioWithGemini(context) },
+                            enabled = !editorState.isGeminiTranscribing && !editorState.isSearchingLyrics && !editorState.isGeminiLoading,
                             colors = ButtonDefaults.buttonColors(containerColor = VioletAccent),
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier
                                 .weight(1f)
-                                .testTag("btn_gemini_lyrics"),
+                                .testTag("btn_gemini_transcribe"),
                             contentPadding = PaddingValues(vertical = 6.dp)
                         ) {
-                            if (editorState.isGeminiLoading) {
+                            if (editorState.isGeminiTranscribing) {
                                 CircularProgressIndicator(color = Color.White, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Gemini...", color = Color.White, fontSize = 12.sp)
+                                Text("Transcribiendo...", color = Color.White, fontSize = 12.sp)
                             } else {
-                                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                Icon(Icons.Default.Mic, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Generar con Gemini", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("Transcribir Audio", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
                         }
                     }
 
-                    if (draft.lyrics.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        FilledTonalButton(
-                            onClick = { viewModel.synchronizeLyricsWithAudioUsingGemini(context) },
-                            enabled = !editorState.isGeminiSyncingLyrics && !editorState.isGeminiLoading,
-                            shape = RoundedCornerShape(10.dp),
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // Acciones secundarias: Sincronizar (si ya hay letra) o Generar por Texto (IA)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (draft.lyrics.isNotBlank()) {
+                            FilledTonalButton(
+                                onClick = { viewModel.synchronizeLyricsWithAudioUsingGemini(context) },
+                                enabled = !editorState.isGeminiSyncingLyrics && !editorState.isGeminiLoading && !editorState.isGeminiTranscribing,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("btn_gemini_sync_lyrics"),
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                ),
+                                contentPadding = PaddingValues(vertical = 6.dp)
+                            ) {
+                                if (editorState.isGeminiSyncingLyrics) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(14.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Sincronizando...", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                } else {
+                                    Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Sincronizar Audio", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
+                        TextButton(
+                            onClick = { viewModel.fetchLyricsWithGemini(context) },
+                            enabled = !editorState.isGeminiLoading && !editorState.isSearchingLyrics && !editorState.isGeminiTranscribing,
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("btn_gemini_sync_lyrics"),
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                            ),
-                            contentPadding = PaddingValues(vertical = 8.dp)
+                                .then(if (draft.lyrics.isNotBlank()) Modifier.weight(1f) else Modifier.fillMaxWidth())
+                                .testTag("btn_gemini_text_lyrics"),
+                            contentPadding = PaddingValues(vertical = 4.dp)
                         ) {
-                            if (editorState.isGeminiSyncingLyrics) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(14.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
+                            if (editorState.isGeminiLoading) {
+                                CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Sincronizando con el audio (Gemini)...", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Generando texto...", fontSize = 11.sp)
                             } else {
-                                Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Sincronizar Letra con el Audio (Gemini AI)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = VioletAccent, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Generar por Texto (IA)", color = VioletAccent, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                             }
                         }
                     }

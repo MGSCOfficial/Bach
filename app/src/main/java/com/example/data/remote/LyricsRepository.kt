@@ -109,42 +109,69 @@ class LyricsRepository {
         }
 
         // 2. Broad search query via LRCLIB /api/search?q=...
-        try {
-            val query = listOf(artistName, trackName).filter { it.isNotBlank() }.joinToString(" ")
-            val encodedQuery = URLEncoder.encode(query, "UTF-8")
-            val url = "https://lrclib.net/api/search?q=$encodedQuery"
-            val request = Request.Builder().url(url).header("User-Agent", userAgent).build()
-            client.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    response.body?.string()?.let { b ->
-                        val arr = JSONArray(b)
-                        for (i in 0 until minOf(arr.length(), 15)) {
-                            val item = arr.getJSONObject(i)
-                            val plain = optCleanLyrics(item, "plainLyrics")
-                            val synced = optCleanLyrics(item, "syncedLyrics")
-                            if (!plain.isNullOrBlank() || !synced.isNullOrBlank()) {
-                                val tName = item.optString("trackName", trackName)
-                                val aName = item.optString("artistName", artistName)
-                                val albName = item.optString("albumName", "")
-                                val srcLabel = if (albName.isNotBlank()) "LRCLIB • $albName" else "LRCLIB"
-                                val res = LyricsResult(
-                                    trackName = tName,
-                                    artistName = aName,
-                                    plainLyrics = plain,
-                                    syncedLyrics = synced,
-                                    source = srcLabel
-                                )
-                                // Avoid exact duplicate lyrics text
-                                if (candidates.none { it.bestLyrics.trim() == res.bestLyrics.trim() }) {
-                                    candidates.add(res)
+        val queriesToTry = mutableListOf<String>()
+        val primaryQuery = listOf(artistName, trackName).filter { it.isNotBlank() }.joinToString(" ")
+        if (primaryQuery.isNotBlank()) queriesToTry.add(primaryQuery)
+
+        // Alias for Jack Black -> Tenacious D
+        if (artistName.contains("Jack Black", ignoreCase = true)) {
+            queriesToTry.add("Tenacious D $trackName")
+        }
+
+        // Album + track
+        if (!albumName.isNullOrBlank() && trackName.isNotBlank()) {
+            queriesToTry.add("$trackName $albumName")
+        }
+
+        // Clean title alone (strip punctuation)
+        val cleanTrack = trackName
+            .replace(Regex("^\\.+"), "")
+            .replace(Regex("(?i)\\s*\\(feat\\.[^)]+\\)"), "")
+            .replace(Regex("(?i)\\s*\\[feat\\.[^]]+\\]"), "")
+            .replace(Regex("(?i)\\s*\\(from[^)]+\\)"), "")
+            .trim()
+        if (cleanTrack.isNotBlank() && !queriesToTry.contains(cleanTrack)) {
+            queriesToTry.add(cleanTrack)
+        }
+
+        for (qStr in queriesToTry) {
+            try {
+                val encodedQuery = URLEncoder.encode(qStr, "UTF-8")
+                val url = "https://lrclib.net/api/search?q=$encodedQuery"
+                val request = Request.Builder().url(url).header("User-Agent", userAgent).build()
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        response.body?.string()?.let { b ->
+                            val arr = JSONArray(b)
+                            for (i in 0 until minOf(arr.length(), 15)) {
+                                val item = arr.getJSONObject(i)
+                                val plain = optCleanLyrics(item, "plainLyrics")
+                                val synced = optCleanLyrics(item, "syncedLyrics")
+                                if (!plain.isNullOrBlank() || !synced.isNullOrBlank()) {
+                                    val tName = item.optString("trackName", trackName)
+                                    val aName = item.optString("artistName", artistName)
+                                    val albName = item.optString("albumName", "")
+                                    val srcLabel = if (albName.isNotBlank()) "LRCLIB • $albName" else "LRCLIB"
+                                    val res = LyricsResult(
+                                        trackName = tName,
+                                        artistName = aName,
+                                        plainLyrics = plain,
+                                        syncedLyrics = synced,
+                                        source = srcLabel
+                                    )
+                                    // Avoid exact duplicate lyrics text
+                                    if (candidates.none { it.bestLyrics.trim() == res.bestLyrics.trim() }) {
+                                        candidates.add(res)
+                                    }
                                 }
                             }
                         }
                     }
                 }
+            } catch (e: Exception) {
+                Log.w("LyricsRepository", "Error en /api/search de LRCLIB para $qStr", e)
             }
-        } catch (e: Exception) {
-            Log.e("LyricsRepository", "Error buscando candidatos de letra en LRCLIB", e)
+            if (candidates.size >= 10) break
         }
 
         // 3. Fallback con artista principal si es colaboración y no hubo resultados
