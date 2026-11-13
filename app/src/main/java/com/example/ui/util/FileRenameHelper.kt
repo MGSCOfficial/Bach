@@ -4,8 +4,17 @@ import com.example.data.model.AudioTrack
 
 object FileRenameHelper {
 
-    fun resolvePattern(pattern: String, track: AudioTrack): String {
+    fun resolveFileName(pattern: String, track: AudioTrack): String {
+        val base = resolvePattern(pattern, track)
         val ext = track.fileName.substringAfterLast(".", "")
+        return if (ext.isNotBlank() && !base.endsWith(".$ext", ignoreCase = true)) {
+            "$base.$ext"
+        } else {
+            base
+        }
+    }
+
+    fun resolvePattern(pattern: String, track: AudioTrack): String {
         val trackNum = track.trackNumber.trim().let { num ->
             val parsed = num.toIntOrNull()
             if (parsed != null && parsed < 10 && !num.startsWith("0")) {
@@ -43,6 +52,6 @@ object FileRenameHelper {
             resolved = title
         }
 
-        return if (ext.isNotBlank()) "$resolved.$ext" else resolved
+        return resolved
     }
 }

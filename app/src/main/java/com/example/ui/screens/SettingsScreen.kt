@@ -769,7 +769,7 @@ fun SettingsScreen(
                             )
                         }
                         val sampleName = remember(settings.fileRenamePattern) {
-                            FileRenameHelper.resolvePattern(settings.fileRenamePattern, sampleTrack) + ".mp3"
+                            FileRenameHelper.resolveFileName(settings.fileRenamePattern, sampleTrack)
                         }
                         Text(
                             text = "Vista previa: $sampleName",

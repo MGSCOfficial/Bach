@@ -877,10 +877,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 // 2b. Auto-rename file if enabled
                 val shouldRename = _settings.value.autoRenameFile
                 if (shouldRename) {
-                    val ext = original.fileName.substringAfterLast(".", "")
-                    val extSuffix = if (ext.isNotBlank()) ".$ext" else ""
-                    val newBaseName = FileRenameHelper.resolvePattern(_settings.value.fileRenamePattern, updatedTrack)
-                    val newFileName = "$newBaseName$extSuffix"
+                    val newFileName = FileRenameHelper.resolveFileName(_settings.value.fileRenamePattern, updatedTrack)
                     val (renamed, renamedTrack) = folderManager.renameTrackFile(updatedTrack, newFileName)
                     if (renamed) {
                         updatedTrack = renamedTrack

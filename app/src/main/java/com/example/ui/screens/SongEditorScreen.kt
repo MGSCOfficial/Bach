@@ -243,10 +243,8 @@ fun SongEditorScreen(
         ) {
             // ==================== AUTO-RENAME STATUS BANNER ====================
             if (settings.autoRenameFile) {
-                val ext = draft.fileName.substringAfterLast(".", "")
-                val extSuffix = if (ext.isNotBlank()) ".$ext" else ""
                 val targetFileName = remember(draft.title, draft.artist, draft.album, draft.trackNumber, draft.year, settings.fileRenamePattern) {
-                    FileRenameHelper.resolvePattern(settings.fileRenamePattern, draft) + extSuffix
+                    FileRenameHelper.resolveFileName(settings.fileRenamePattern, draft)
                 }
                 Surface(
                     modifier = Modifier
