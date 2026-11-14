@@ -1,7 +1,7 @@
 # Bach 🎵
 
 <p align="center">
-  <img src="bach_logo.png" alt="Bach Logo" width="120" height="120"/>
+  <img src="bach_logo_transparent.png" alt="Bach Logo" width="160" height="160"/>
 </p>
 
 <p align="center">
