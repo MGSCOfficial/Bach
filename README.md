@@ -1,7 +1,7 @@
 # Bach 🎼
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/mgsc-personal/Bach/main/app/src/main/res/drawable/bach_logo.svg" alt="Bach Logo" width="120" height="120" onerror="this.style.display='none'"/>
+  <img src="https://raw.githubusercontent.com/mgsc-personal/Bach/main/bach_logo.svg" alt="Bach Logo" width="120" height="120" onerror="this.style.display='none'"/>
 </p>
 
 <p align="center">
