@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.MyApplication" parent="android:Theme.DeviceDefault.NoActionBar">
+        <!-- Pure AMOLED Black background for splash screen to match app theme perfectly -->
+        <item name="android:windowSplashScreenBackground">#000000</item>
+        <!-- Use the clean vector logo alone, avoiding nested dark boxes/circles -->
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_bach_logo</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+    </style>
+</resources>

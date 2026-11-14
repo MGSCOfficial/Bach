@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -59,6 +60,7 @@ fun SettingsScreen(
 
     // State for API Key modal configuration
     var activeApiKeyTarget by remember { mutableStateOf<ApiKeyTarget?>(null) }
+    var showGplDialog by remember { mutableStateOf(false) }
 
     activeApiKeyTarget?.let { target ->
         ApiKeyConfigDialog(
@@ -851,20 +853,12 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0xFF081C33)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                painter = androidx.compose.ui.res.painterResource(com.example.R.drawable.ic_bach_logo),
-                                contentDescription = "Bach Logo",
-                                tint = Color.Unspecified,
-                                modifier = Modifier.size(58.dp)
-                            )
-                        }
+                        Icon(
+                            painter = androidx.compose.ui.res.painterResource(com.example.R.drawable.ic_bach_logo),
+                            contentDescription = "Bach Logo",
+                            tint = Color.Unspecified,
+                            modifier = Modifier.size(76.dp)
+                        )
 
                         Spacer(modifier = Modifier.width(16.dp))
 
@@ -877,7 +871,7 @@ fun SettingsScreen(
                                 )
                             )
                             Text(
-                                text = "Versión 1.6",
+                                text = "Versión 1.6.2",
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -901,21 +895,31 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Shield,
-                                contentDescription = null,
-                                tint = accent,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Licencia: GNU GPLv3",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontWeight = FontWeight.Medium
+                        Surface(
+                            onClick = { showGplDialog = true },
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color.Transparent
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(vertical = 4.dp, horizontal = 2.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Shield,
+                                    contentDescription = null,
+                                    tint = accent,
+                                    modifier = Modifier.size(16.dp)
                                 )
-                            )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Licencia: GNU GPLv3",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = accent,
+                                        fontWeight = FontWeight.SemiBold,
+                                        textDecoration = TextDecoration.Underline
+                                    )
+                                )
+                            }
                         }
 
                         val uriHandler = LocalUriHandler.current
@@ -941,6 +945,86 @@ fun SettingsScreen(
                         }
                     }
                 }
+            }
+
+            if (showGplDialog) {
+                val uriHandler = LocalUriHandler.current
+                AlertDialog(
+                    onDismissRequest = { showGplDialog = false },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.Shield,
+                            contentDescription = null,
+                            tint = accent,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    },
+                    title = {
+                        Text(
+                            text = "GNU General Public License v3.0",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            textAlign = TextAlign.Center
+                        )
+                    },
+                    text = {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            Text(
+                                text = "Bach es software libre y de código abierto bajo los términos de la Licencia Pública General de GNU (GPLv3) publicada por la Free Software Foundation.",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    lineHeight = 18.sp
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "Tus libertades y derechos garantizados:\n" +
+                                        "• Libertad 0: Ejecutar el programa para cualquier propósito.\n" +
+                                        "• Libertad 1: Estudiar el código fuente y modificarlo según tus necesidades.\n" +
+                                        "• Libertad 2: Redistribuir copias del software libremente.\n" +
+                                        "• Libertad 3: Mejorar el programa y publicar versiones modificadas.\n\n" +
+                                        "Cláusula Copyleft: Cualquier redistribución o trabajo derivado debe permanecer bajo la misma licencia GNU GPLv3 y liberar el código fuente.",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    lineHeight = 17.sp
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "Sin Garantía: El software se distribuye con la esperanza de ser útil, pero SIN NINGUNA GARANTÍA implícita de COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR.",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                )
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = { showGplDialog = false },
+                            colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = Color.Black)
+                        ) {
+                            Text("Entendido", fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        OutlinedButton(
+                            onClick = {
+                                uriHandler.openUri("https://www.gnu.org/licenses/gpl-3.0.html")
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.OpenInNew,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Ver en GNU.org", fontSize = 12.sp)
+                        }
+                    }
+                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))

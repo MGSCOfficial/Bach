@@ -86,23 +86,17 @@ fun LibraryScreen(
         )
     }
 
-    Scaffold(
+    Column(
         modifier = modifier
             .fillMaxSize()
-            .testTag("library_screen"),
-        containerColor = MaterialTheme.colorScheme.background
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .statusBarsPadding()
-                .padding(horizontal = 16.dp)
-        ) {
-            Spacer(modifier = Modifier.height(10.dp))
+            .testTag("library_screen")
+            .statusBarsPadding()
+            .padding(horizontal = 16.dp)
+    ) {
+        Spacer(modifier = Modifier.height(4.dp))
 
-            // 1. Compact Search Field + Action Buttons Row (Zero wasted space)
-            Row(
+        // 1. Compact Search Field + Action Buttons Row (Zero wasted space)
+        Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -468,7 +462,6 @@ fun LibraryScreen(
             }
         }
     }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
