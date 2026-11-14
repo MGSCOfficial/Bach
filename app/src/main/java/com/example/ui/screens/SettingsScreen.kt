@@ -973,6 +973,14 @@ fun SettingsScreen(
                                 .verticalScroll(rememberScrollState())
                         ) {
                             Text(
+                                text = "Copyright © 2026 Moisés Gabriel Silva Castro (MGSCOfficial)",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = accent
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
                                 text = "Bach es software libre y de código abierto bajo los términos de la Licencia Pública General de GNU (GPLv3) publicada por la Free Software Foundation.",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     color = MaterialTheme.colorScheme.onSurface,

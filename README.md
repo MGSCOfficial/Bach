@@ -1,7 +1,7 @@
-# Bach 🎼
+# Bach 🎵
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/mgsc-personal/Bach/main/bach_logo.svg" alt="Bach Logo" width="120" height="120" onerror="this.style.display='none'"/>
+  <img src="https://raw.githubusercontent.com/MGSCOfficial/Bach/main/bach_logo.svg" alt="Bach Logo" width="120" height="120" onerror="this.style.display='none'"/>
 </p>
 
 <p align="center">
@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/UI-Jetpack_Compose_Material_3-blue.svg?style=flat-square&logo=jetpackcompose" alt="Jetpack Compose"/>
   <img src="https://img.shields.io/badge/Kotlin-2.1.0-purple.svg?style=flat-square&logo=kotlin" alt="Kotlin"/>
   <img src="https://img.shields.io/badge/Theme-Bach_Gold_%26_AMOLED-darkgreen.svg?style=flat-square" alt="Bach Gold & AMOLED"/>
-  <img src="https://img.shields.io/badge/License-MIT-orange.svg?style=flat-square" alt="License"/>
+  <img src="https://img.shields.io/badge/License-GNU_GPLv3-blue.svg?style=flat-square" alt="GNU GPLv3 License"/>
 </p>
 
 ---
@@ -38,10 +38,10 @@ Permite identificar pistas de audio, descargar carátulas en alta definición (`
 ### 🎨 Experiencia Visual Premium (Material You & AMOLED)
 * **Material You Dinámico**: Paleta de colores adaptativa extraída en tiempo real del fondo de pantalla del sistema (Android 12+).
 * **Negro AMOLED Puro (`#000000`)**: Fondo 100% negro azabache libre de superposiciones tonales grises, ideal para máxima autonomía en paneles OLED.
-* **Acentos Personalizables**: 6 presets temáticos (Esmeralda, Violeta, Cian, Ámbar, Rosa, Azul) para usuarios que prefieren estilos fijos.
+* **Acentos Personalizables**: Presets temáticos clásicos y modernos para usuarios que prefieren estilos fijos.
 
 ### 📁 Gestión Eficiente de Biblioteca y Carpetas
-* **Navegación por Pestañas**: Vistas dedicadas de **Canciones**, **Carpetas** y **Ajustes** con barra de navegación flotante ergonómica.
+* **Navegación por Pestañas**: Vistas dedicadas de **Canciones**, **Carpetas** y **Ajustes** con barra de navegación compacta y ergonómica.
 * **Drilldown de Carpetas**: Inspección de canciones filtradas por carpeta individual con contador en vivo.
 * **Ordenamiento Multidimensional**: Reorganiza tu colección por:
   * Fecha de modificación (recientes / antiguos)
@@ -51,7 +51,7 @@ Permite identificar pistas de audio, descargar carátulas en alta definición (`
 * **Filtros Rápidos**: Acceso instantáneo a canciones *Sin Carátula*, *Sin Letra* o *Incompletas*.
 
 ### 📜 Gestor de Letras Sincronizadas (.LRC)
-* **Integración con LRCLIB**: Obtención directa de letras con marcas de tiempo precisas (*timestamped*).
+* **Integración con LRCLIB y Gemini**: Obtención directa de letras con marcas de tiempo precisas (*timestamped*).
 * **Opciones Configurables**: Incrustación de la letra directamente en la etiqueta de audio y/o guardado automático como archivo complementario `.lrc`.
 * **Protección contra Datos Nulos**: Validación estricta que impide que resultados vacíos o `"null"` sobrescriban metadatos válidos existentes.
 
@@ -68,7 +68,7 @@ Permite identificar pistas de audio, descargar carátulas en alta definición (`
 | **Lenguaje** | [Kotlin 2.1.0](https://kotlinlang.org/) |
 | **Framework UI** | [Jetpack Compose](https://developer.android.com/jetpack/compose) con [Material 3](https://m3.material.io/) |
 | **Asincronía & Estado** | Coroutines, Kotlin Flow, StateFlow, ViewModel |
-| **Red & APIs** | [OkHttp 4.12](https://square.github.io/okhttp/) (Parallel Deferred Async HTTP Requests) |
+| **Red & APIs** | [OkHttp 4.12](https://square.github.io/okhttp/) |
 | **Carga de Imágenes** | [Coil 2.6](https://coil-kt.github.io/coil/) |
 | **Motor de Audio** | `MediaMetadataRetriever` + Parsers Binarios ID3v2/QuickTime |
 | **Persistencia** | Android SharedPreferences / DataStore |
@@ -86,7 +86,7 @@ Permite identificar pistas de audio, descargar carátulas en alta definición (`
 
 1. **Clonar el repositorio**:
    ```bash
-   git clone https://github.com/mgsc-personal/Bach.git
+   git clone https://github.com/MGSCOfficial/Bach.git
    cd Bach
    ```
 
@@ -107,6 +107,14 @@ Permite identificar pistas de audio, descargar carátulas en alta definición (`
 
 ---
 
-## 📄 Licencia
+## 📄 Licencia y Derechos de Autor
 
-Este proyecto está bajo la Licencia [MIT](LICENSE). Puedes utilizarlo, modificarlo y distribuirlo libremente.
+Este proyecto es software libre y de código abierto distribuido bajo los términos de la **GNU General Public License v3.0 (GPLv3)**.
+
+**Copyright (C) 2026 Moisés Gabriel Silva Castro (MGSCOfficial)**
+
+> Este programa es software libre: puede redistribuirlo y/o modificarlo bajo los términos de la Licencia Pública General GNU publicada por la Free Software Foundation, bien de la versión 3 de la Licencia, o (a su elección) cualquier versión posterior.
+>
+> Este programa se distribuye con la esperanza de que sea útil, pero SIN NINGUNA GARANTÍA; ni siquiera la garantía implícita de COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la Licencia Pública General GNU para más detalles.
+
+Para consultar los términos completos y condiciones, revise el archivo [LICENSE](LICENSE).
