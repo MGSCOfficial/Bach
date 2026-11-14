@@ -5,6 +5,25 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ---
 
+## [1.5.0] - 2026-11-13
+
+### Añadido
+- **Operaciones Masivas por Carpeta (`BatchOperationsSheet`)**:
+  - Nuevo modal bottom sheet accesible desde la barra superior de Carpetas (`FoldersScreen`) mediante el icono `PlaylistAddCheck`.
+  - Selector interactivo de carpetas de destino con casilla de selección global ("Seleccionar todas") y conteo de canciones por carpeta.
+  - **Renombrado Masivo de Archivos**: Procesa todas las pistas de las carpetas seleccionadas renombrando cada archivo físico según el patrón de metadatos configurado (`%artist% - %title%`), actualizando en tiempo real la caché local y sincronizando archivos `.lrc` asociados.
+  - **Búsqueda y Auto-etiquetado Masivo**: Identificación y aplicación automática multi-fuente (iTunes, MusicBrainz, Deezer) de título, artista, álbum, año, género y carátula en lote, con opción de filtro "Solo incompletas o sin carátula" y retardo adaptativo de 250ms para evitar rate-limits.
+  - Monitor de progreso en tiempo real con barra lineal porcentual, métricas vivas de éxito / omitidas / errores, y botón de cancelación determinista.
+
+### Corregido & Navegación Persistente
+- **Persistencia de Navegación Dentro de Carpetas**:
+  - Elevación del estado `selectedFolder` al `MusicViewModel`, evitando que el usuario sea devuelto a la raíz de selección de carpetas tras editar una pista o presionar Atrás.
+- **Retención Absoluta de la Posición de Scroll**:
+  - Reemplazo de la navegación destructiva `AnimatedContent` en `MainActivity` por una arquitectura desacoplada en dos capas: el `Scaffold` base (Biblioteca, Carpetas, Ajustes) permanece permanentemente vivo en la composición, mientras que `SongEditorScreen` se despliega como capa flotante con `AnimatedVisibility`.
+  - Al regresar del editor, la lista mantiene al 100% su índice de scroll exacto, erradicando la molestia de tener que scrollear nuevamente desde el inicio.
+
+---
+
 ## [1.4.0] - 2026-11-12
 
 ### Añadido

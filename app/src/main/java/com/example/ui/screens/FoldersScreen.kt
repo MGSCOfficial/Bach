@@ -38,6 +38,7 @@ import com.example.data.model.MusicFolder
 import com.example.data.model.SortOrder
 import com.example.data.model.belongsTo
 import com.example.data.storage.ViewLayoutMode
+import com.example.ui.components.BatchOperationsSheet
 import com.example.ui.components.FolderGridCard
 import com.example.ui.components.TrackCard
 import com.example.ui.components.TrackGridCard
@@ -54,7 +55,9 @@ fun FoldersScreen(
     val libraryState by viewModel.libraryState.collectAsStateWithLifecycle()
     val settingsState by viewModel.settings.collectAsStateWithLifecycle()
     val playerState by viewModel.audioPlayer.playerState.collectAsStateWithLifecycle()
-    var selectedFolder by remember { mutableStateOf<MusicFolder?>(null) }
+    val selectedFolder by viewModel.selectedFolder.collectAsStateWithLifecycle()
+    val batchState by viewModel.batchState.collectAsStateWithLifecycle()
+    var showBatchSheet by remember { mutableStateOf(false) }
     var folderSearchQuery by remember { mutableStateOf("") }
     var folderSortOrder by remember { mutableStateOf(SortOrder.RECENTLY_MODIFIED) }
     var showFolderSortMenu by remember { mutableStateOf(false) }
@@ -70,7 +73,7 @@ fun FoldersScreen(
 
     // Intercept back button if user is inside a folder drill-down
     BackHandler(enabled = selectedFolder != null) {
-        selectedFolder = null
+        viewModel.setSelectedFolder(null)
         folderSearchQuery = ""
     }
 
@@ -112,7 +115,7 @@ fun FoldersScreen(
                 navigationIcon = {
                     if (selectedFolder != null) {
                         IconButton(onClick = {
-                            selectedFolder = null
+                            viewModel.setSelectedFolder(null)
                             folderSearchQuery = ""
                         }) {
                             Icon(
@@ -125,6 +128,13 @@ fun FoldersScreen(
                 },
                 actions = {
                     if (selectedFolder == null) {
+                        IconButton(onClick = { showBatchSheet = true }) {
+                            Icon(
+                                imageVector = Icons.Default.PlaylistAddCheck,
+                                contentDescription = "Acciones Masivas por Carpeta",
+                                tint = LocalAccentColor.current
+                            )
+                        }
                         val isFoldersGrid = settingsState.foldersLayoutMode == ViewLayoutMode.GRID
                         IconButton(onClick = { viewModel.toggleFoldersLayoutMode() }) {
                             Icon(
@@ -148,6 +158,13 @@ fun FoldersScreen(
                             )
                         }
                     } else {
+                        IconButton(onClick = { showBatchSheet = true }) {
+                            Icon(
+                                imageVector = Icons.Default.PlaylistAddCheck,
+                                contentDescription = "Acciones Masivas en esta carpeta",
+                                tint = LocalAccentColor.current
+                            )
+                        }
                         val isSongsGrid = settingsState.songsLayoutMode == ViewLayoutMode.GRID
                         IconButton(onClick = { viewModel.toggleSongsLayoutMode() }) {
                             Icon(
@@ -245,7 +262,7 @@ fun FoldersScreen(
                                     folder = folder,
                                     trackCount = tracksInFolder,
                                     onFolderClick = {
-                                        selectedFolder = folder
+                                        viewModel.setSelectedFolder(folder)
                                         folderSearchQuery = ""
                                     },
                                     onDeleteClick = {
@@ -269,7 +286,7 @@ fun FoldersScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable {
-                                            selectedFolder = folder
+                                            viewModel.setSelectedFolder(folder)
                                             folderSearchQuery = ""
                                         },
                                     shape = RoundedCornerShape(14.dp),
@@ -619,7 +636,7 @@ fun FoldersScreen(
                             val toRemove = folderToRemove
                             folderPendingRemoval = null
                             if (selectedFolder?.uriString == toRemove.uriString) {
-                                selectedFolder = null
+                                viewModel.setSelectedFolder(null)
                                 folderSearchQuery = ""
                             }
                             viewModel.removeMusicFolder(toRemove)
@@ -642,5 +659,21 @@ fun FoldersScreen(
                 }
             )
         }
+    }
+
+    if (showBatchSheet) {
+        BatchOperationsSheet(
+            folders = libraryState.folders,
+            allTracks = libraryState.tracks,
+            batchState = batchState,
+            fileRenamePattern = settingsState.fileRenamePattern,
+            initialSelectedFolder = selectedFolder,
+            onStartBatchRename = { folders -> viewModel.startBatchRename(folders) },
+            onStartBatchAutoTag = { folders, onlyMissing -> viewModel.startBatchAutoTag(folders, onlyMissing) },
+            onCancelBatch = { viewModel.cancelBatchOperation() },
+            onDismissBatchProgress = { viewModel.dismissBatchProgress() },
+            onDismiss = { showBatchSheet = false },
+            isAmoled = settingsState.amoledDark && settingsState.themeMode != com.example.data.storage.ThemeMode.LIGHT
+        )
     }
 }

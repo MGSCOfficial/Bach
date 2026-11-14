@@ -4,10 +4,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -75,113 +76,113 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AnimatedContent(
-                        targetState = currentScreen,
-                        transitionSpec = { fadeIn() togetherWith fadeOut() },
-                        label = "screen_transition"
-                    ) { screen ->
-                        when (screen) {
-                            is AppScreen.Main -> {
-                                Scaffold(
-                                    modifier = Modifier.fillMaxSize(),
-                                    containerColor = MaterialTheme.colorScheme.background,
-                                    bottomBar = {
-                                        val isAmoled = settings.amoledDark && settings.themeMode != ThemeMode.LIGHT
-                                        val navBarColor = if (isAmoled) AmoledDarkBg else MaterialTheme.colorScheme.surface
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .background(navBarColor)
-                                        ) {
-                                            MiniPlayerBar(
-                                                playerState = playerState,
-                                                track = activePlayingTrack,
-                                                onPlayPauseClick = { viewModel.audioPlayer.togglePlayPause() },
-                                                onSeek = { pos -> viewModel.audioPlayer.seekTo(pos) },
-                                                onOpenEditor = {
-                                                    activePlayingTrack?.let {
-                                                        viewModel.openTrackEditor(it)
-                                                        currentScreen = AppScreen.Editor(it)
-                                                    }
-                                                }
-                                            )
-
-                                            NavigationBar(
-                                                containerColor = navBarColor,
-                                                tonalElevation = if (isAmoled) 0.dp else 4.dp
-                                            ) {
-                                                MainTab.values().forEach { tab ->
-                                                    val isSelected = currentTab == tab
-                                                    NavigationBarItem(
-                                                        selected = isSelected,
-                                                        onClick = { currentTab = tab },
-                                                        icon = {
-                                                            Icon(
-                                                                imageVector = tab.icon,
-                                                                contentDescription = tab.label
-                                                            )
-                                                        },
-                                                        label = {
-                                                            Text(
-                                                                text = tab.label,
-                                                                fontSize = 11.sp,
-                                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                                                            )
-                                                        },
-                                                        colors = NavigationBarItemDefaults.colors(
-                                                            selectedIconColor = Color.Black,
-                                                            selectedTextColor = LocalAccentColor.current,
-                                                            indicatorColor = LocalAccentColor.current,
-                                                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                                        )
-                                                    )
-                                                }
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        // Base Layer: Main Scaffold is ALWAYS kept alive in composition
+                        // to preserve scroll positions, folder drill-down, and search queries.
+                        Scaffold(
+                            modifier = Modifier.fillMaxSize(),
+                            containerColor = MaterialTheme.colorScheme.background,
+                            bottomBar = {
+                                val isAmoled = settings.amoledDark && settings.themeMode != ThemeMode.LIGHT
+                                val navBarColor = if (isAmoled) AmoledDarkBg else MaterialTheme.colorScheme.surface
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(navBarColor)
+                                ) {
+                                    MiniPlayerBar(
+                                        playerState = playerState,
+                                        track = activePlayingTrack,
+                                        onPlayPauseClick = { viewModel.audioPlayer.togglePlayPause() },
+                                        onSeek = { pos -> viewModel.audioPlayer.seekTo(pos) },
+                                        onOpenEditor = {
+                                            activePlayingTrack?.let {
+                                                viewModel.openTrackEditor(it)
+                                                currentScreen = AppScreen.Editor(it)
                                             }
                                         }
-                                    }
-                                ) { paddingValues ->
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(paddingValues)
+                                    )
+
+                                    NavigationBar(
+                                        containerColor = navBarColor,
+                                        tonalElevation = if (isAmoled) 0.dp else 4.dp
                                     ) {
-                                        when (currentTab) {
-                                            MainTab.SONGS -> {
-                                                LibraryScreen(
-                                                    viewModel = viewModel,
-                                                    onTrackSelect = { track ->
-                                                        viewModel.openTrackEditor(track)
-                                                        currentScreen = AppScreen.Editor(track)
-                                                    }
+                                        MainTab.values().forEach { tab ->
+                                            val isSelected = currentTab == tab
+                                            NavigationBarItem(
+                                                selected = isSelected,
+                                                onClick = { currentTab = tab },
+                                                icon = {
+                                                    Icon(
+                                                        imageVector = tab.icon,
+                                                        contentDescription = tab.label
+                                                    )
+                                                },
+                                                label = {
+                                                    Text(
+                                                        text = tab.label,
+                                                        fontSize = 11.sp,
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                                    )
+                                                },
+                                                colors = NavigationBarItemDefaults.colors(
+                                                    selectedIconColor = Color.Black,
+                                                    selectedTextColor = LocalAccentColor.current,
+                                                    indicatorColor = LocalAccentColor.current,
+                                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
-                                            }
-                                            MainTab.FOLDERS -> {
-                                                FoldersScreen(
-                                                    viewModel = viewModel,
-                                                    onTrackSelect = { track ->
-                                                        viewModel.openTrackEditor(track)
-                                                        currentScreen = AppScreen.Editor(track)
-                                                    }
-                                                )
-                                            }
-                                            MainTab.SETTINGS -> {
-                                                SettingsScreen(
-                                                    viewModel = viewModel
-                                                )
-                                            }
+                                            )
                                         }
                                     }
                                 }
                             }
-                            is AppScreen.Editor -> {
-                                SongEditorScreen(
-                                    viewModel = viewModel,
-                                    onBack = {
-                                        currentScreen = AppScreen.Main
+                        ) { paddingValues ->
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(paddingValues)
+                            ) {
+                                when (currentTab) {
+                                    MainTab.SONGS -> {
+                                        LibraryScreen(
+                                            viewModel = viewModel,
+                                            onTrackSelect = { track ->
+                                                viewModel.openTrackEditor(track)
+                                                currentScreen = AppScreen.Editor(track)
+                                            }
+                                        )
                                     }
-                                )
+                                    MainTab.FOLDERS -> {
+                                        FoldersScreen(
+                                            viewModel = viewModel,
+                                            onTrackSelect = { track ->
+                                                viewModel.openTrackEditor(track)
+                                                currentScreen = AppScreen.Editor(track)
+                                            }
+                                        )
+                                    }
+                                    MainTab.SETTINGS -> {
+                                        SettingsScreen(
+                                            viewModel = viewModel
+                                        )
+                                    }
+                                }
                             }
+                        }
+
+                        // Top Layer: SongEditorScreen slides over without destroying background state
+                        AnimatedVisibility(
+                            visible = currentScreen is AppScreen.Editor,
+                            enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
+                            exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut()
+                        ) {
+                            SongEditorScreen(
+                                viewModel = viewModel,
+                                onBack = {
+                                    currentScreen = AppScreen.Main
+                                }
+                            )
                         }
                     }
                 }

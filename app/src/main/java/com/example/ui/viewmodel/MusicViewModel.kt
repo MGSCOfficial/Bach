@@ -24,10 +24,13 @@ import com.example.ui.util.AudioThumbnailLoader
 import com.example.ui.util.FileRenameHelper
 import com.example.ui.util.GeminiPromptHelper
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
@@ -79,6 +82,26 @@ data class EditorUiState(
     val geminiStatusMessage: String? = null
 )
 
+enum class BatchOperationType(val displayName: String) {
+    NONE("Ninguna"),
+    RENAME_FILES("Renombrado Masivo"),
+    AUTO_TAG("Etiquetado Masivo")
+}
+
+data class BatchProgressState(
+    val isRunning: Boolean = false,
+    val type: BatchOperationType = BatchOperationType.NONE,
+    val currentItemIndex: Int = 0,
+    val totalItems: Int = 0,
+    val currentItemName: String = "",
+    val statusMessage: String = "",
+    val successCount: Int = 0,
+    val skippedCount: Int = 0,
+    val errorCount: Int = 0,
+    val isFinished: Boolean = false,
+    val selectedFolderNames: List<String> = emptyList()
+)
+
 class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     private val onlineRepo = OnlineMetadataRepository()
@@ -96,6 +119,17 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _editorState = MutableStateFlow(EditorUiState())
     val editorState: StateFlow<EditorUiState> = _editorState.asStateFlow()
+
+    private val _selectedFolder = MutableStateFlow<MusicFolder?>(null)
+    val selectedFolder: StateFlow<MusicFolder?> = _selectedFolder.asStateFlow()
+
+    fun setSelectedFolder(folder: MusicFolder?) {
+        _selectedFolder.value = folder
+    }
+
+    private var batchJob: Job? = null
+    private val _batchState = MutableStateFlow(BatchProgressState())
+    val batchState: StateFlow<BatchProgressState> = _batchState.asStateFlow()
 
     private val _availableGeminiModels = MutableStateFlow<List<GeminiModelOption>>(emptyList())
     val availableGeminiModels: StateFlow<List<GeminiModelOption>> = _availableGeminiModels.asStateFlow()
@@ -1350,6 +1384,256 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun dismissSaveNotification() {
         _editorState.update { it.copy(saveNotification = null) }
+    }
+
+    // ==================== OPERACIONES MASIVAS (BATCH OPERATIONS) ====================
+
+    fun startBatchRename(folders: List<MusicFolder>) {
+        if (folders.isEmpty()) return
+        val allTracks = _libraryState.value.tracks.filter { track ->
+            folders.any { track.belongsTo(it) }
+        }
+        if (allTracks.isEmpty()) return
+
+        batchJob?.cancel()
+        batchJob = viewModelScope.launch(Dispatchers.IO) {
+            _batchState.value = BatchProgressState(
+                isRunning = true,
+                type = BatchOperationType.RENAME_FILES,
+                totalItems = allTracks.size,
+                selectedFolderNames = folders.map { it.displayName },
+                statusMessage = "Iniciando renombrado de ${allTracks.size} archivos..."
+            )
+
+            var success = 0
+            var skipped = 0
+            var errors = 0
+            val pattern = _settings.value.fileRenamePattern
+
+            for ((index, track) in allTracks.withIndex()) {
+                if (!isActive) break
+
+                val newFileName = FileRenameHelper.resolveFileName(pattern, track)
+                _batchState.update {
+                    it.copy(
+                        currentItemIndex = index + 1,
+                        currentItemName = track.fileName,
+                        statusMessage = "Renombrando: ${track.fileName} -> $newFileName"
+                    )
+                }
+
+                if (newFileName.isBlank() || newFileName == track.fileName) {
+                    skipped++
+                } else {
+                    val (renamed, updatedTrack) = folderManager.renameTrackFile(track, newFileName)
+                    if (renamed) {
+                        success++
+                        AudioThumbnailLoader.invalidate(track.fileUri)
+                        AudioThumbnailLoader.invalidate(updatedTrack.fileUri)
+                        folderManager.updateSingleTrackInCache(updatedTrack)
+                        _libraryState.update { state ->
+                            val updatedList = state.tracks.map {
+                                if (it.id == track.id || it.fileUri == track.fileUri) updatedTrack else it
+                            }
+                            state.copy(
+                                tracks = updatedList,
+                                filteredTracks = applyFilterSearchAndSort(
+                                    updatedList,
+                                    state.activeFilter,
+                                    state.searchQuery,
+                                    state.sortOrder
+                                )
+                            )
+                        }
+                    } else {
+                        errors++
+                    }
+                }
+
+                _batchState.update {
+                    it.copy(
+                        successCount = success,
+                        skippedCount = skipped,
+                        errorCount = errors
+                    )
+                }
+            }
+
+            _batchState.update {
+                it.copy(
+                    isRunning = false,
+                    isFinished = true,
+                    statusMessage = "Proceso finalizado: $success renombrados, $skipped sin cambios, $errors errores."
+                )
+            }
+        }
+    }
+
+    fun startBatchAutoTag(folders: List<MusicFolder>, onlyMissing: Boolean = true) {
+        if (folders.isEmpty()) return
+        val matchingTracks = _libraryState.value.tracks.filter { track ->
+            folders.any { track.belongsTo(it) }
+        }
+        val targetTracks = if (onlyMissing) {
+            matchingTracks.filter { !it.isComplete || !it.hasCover }
+        } else {
+            matchingTracks
+        }
+        if (targetTracks.isEmpty()) {
+            _batchState.value = BatchProgressState(
+                isRunning = false,
+                isFinished = true,
+                statusMessage = if (onlyMissing) "Todas las canciones de las carpetas seleccionadas ya están completas."
+                else "No hay archivos de audio para procesar."
+            )
+            return
+        }
+
+        batchJob?.cancel()
+        batchJob = viewModelScope.launch(Dispatchers.IO) {
+            _batchState.value = BatchProgressState(
+                isRunning = true,
+                type = BatchOperationType.AUTO_TAG,
+                totalItems = targetTracks.size,
+                selectedFolderNames = folders.map { it.displayName },
+                statusMessage = "Buscando metadatos para ${targetTracks.size} canciones..."
+            )
+
+            var success = 0
+            var skipped = 0
+            var errors = 0
+            val s = _settings.value
+            val targetCoverSize = s.targetCoverSizePx
+
+            for ((index, track) in targetTracks.withIndex()) {
+                if (!isActive) break
+
+                val cleanTitle = track.title.ifBlank { track.fileName.substringBeforeLast(".") }
+                    .replace(Regex("\\[.*?\\]|\\(.*?\\)"), "").trim()
+                val cleanArtist = track.artist.ifBlank { "" }
+
+                _batchState.update {
+                    it.copy(
+                        currentItemIndex = index + 1,
+                        currentItemName = track.fileName,
+                        statusMessage = "Buscando: ${track.displayTitle}..."
+                    )
+                }
+
+                val candidates = if (cleanArtist.isNotBlank() && cleanArtist != "Desconocido") {
+                    onlineRepo.searchAdvanced(title = cleanTitle, artist = cleanArtist, album = track.album, settings = s)
+                } else {
+                    onlineRepo.searchAllSources(query = cleanTitle, settings = s)
+                }
+
+                val best = candidates.firstOrNull()
+                if (best != null) {
+                    _batchState.update {
+                        it.copy(statusMessage = "Aplicando: ${best.title} — ${best.artist}...")
+                    }
+
+                    val coverBytes = if (!best.coverArtUrl.isNullOrBlank()) {
+                        onlineRepo.downloadImageBytes(best.coverArtUrl)
+                    } else {
+                        track.coverArtBytes
+                    }
+
+                    val updatedTrack = track.copy(
+                        title = best.title.ifBlank { track.title },
+                        artist = best.artist.ifBlank { track.artist },
+                        album = best.album.ifBlank { track.album },
+                        albumArtist = best.albumArtist.ifBlank { best.artist },
+                        year = best.year.ifBlank { track.year },
+                        genre = best.genre.ifBlank { track.genre },
+                        trackNumber = best.trackNumber.ifBlank { track.trackNumber },
+                        discNumber = best.discNumber.ifBlank { track.discNumber },
+                        hasCover = coverBytes != null && coverBytes.isNotEmpty(),
+                        coverArtBytes = coverBytes,
+                        dateModified = System.currentTimeMillis()
+                    )
+
+                    val wrote = AudioTagWriter.writeTagsDirectly(
+                        context = getApplication(),
+                        track = track,
+                        updatedTrack = updatedTrack,
+                        coverBytes = coverBytes,
+                        lyricsText = null,
+                        targetCoverDimensionPx = targetCoverSize
+                    )
+
+                    if (wrote) {
+                        var finalTrack = updatedTrack
+                        if (s.autoRenameFile) {
+                            val newName = FileRenameHelper.resolveFileName(s.fileRenamePattern, finalTrack)
+                            val (renamed, renamedTrack) = folderManager.renameTrackFile(finalTrack, newName)
+                            if (renamed) {
+                                finalTrack = renamedTrack
+                            }
+                        }
+
+                        AudioThumbnailLoader.invalidate(track.fileUri)
+                        if (finalTrack.fileUri != track.fileUri) {
+                            AudioThumbnailLoader.invalidate(finalTrack.fileUri)
+                        }
+                        folderManager.updateSingleTrackInCache(finalTrack)
+
+                        _libraryState.update { st ->
+                            val updatedList = st.tracks.map {
+                                if (it.id == track.id || it.fileUri == track.fileUri) finalTrack else it
+                            }
+                            st.copy(
+                                tracks = updatedList,
+                                filteredTracks = applyFilterSearchAndSort(
+                                    updatedList,
+                                    st.activeFilter,
+                                    st.searchQuery,
+                                    st.sortOrder
+                                )
+                            )
+                        }
+                        success++
+                    } else {
+                        errors++
+                    }
+                } else {
+                    skipped++
+                }
+
+                _batchState.update {
+                    it.copy(
+                        successCount = success,
+                        skippedCount = skipped,
+                        errorCount = errors
+                    )
+                }
+
+                delay(250)
+            }
+
+            _batchState.update {
+                it.copy(
+                    isRunning = false,
+                    isFinished = true,
+                    statusMessage = "Búsqueda finalizada: $success etiquetadas, $skipped sin coincidencias, $errors errores."
+                )
+            }
+        }
+    }
+
+    fun cancelBatchOperation() {
+        batchJob?.cancel()
+        _batchState.update {
+            it.copy(
+                isRunning = false,
+                isFinished = true,
+                statusMessage = "Operación cancelada por el usuario."
+            )
+        }
+    }
+
+    fun dismissBatchProgress() {
+        batchJob?.cancel()
+        _batchState.value = BatchProgressState()
     }
 
     override fun onCleared() {

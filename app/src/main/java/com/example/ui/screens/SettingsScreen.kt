@@ -882,7 +882,7 @@ fun SettingsScreen(
                             )
                         )
                         Text(
-                            text = "Versión 1.4.0 • Edición Pro con Multi-fuente y Material You",
+                            text = "Versión 1.5.0 • Edición Pro con Operaciones Masivas",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
