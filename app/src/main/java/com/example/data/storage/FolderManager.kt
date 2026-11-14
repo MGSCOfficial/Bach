@@ -485,21 +485,49 @@ class FolderManager(private val context: Context) {
                     return true to updated
                 }
             } else {
-                val doc = DocumentFile.fromSingleUri(context, uri)
-                if (doc != null && doc.renameTo(sanitizedNewName)) {
-                    val newUriStr = doc.uri.toString()
+                // Primary: DocumentsContract.renameDocument (Official standard for SAF Document URIs)
+                var newUri: Uri? = try {
+                    DocumentsContract.renameDocument(context.contentResolver, uri, sanitizedNewName)
+                } catch (e: Exception) {
+                    Log.w("FolderManager", "DocumentsContract.renameDocument failed for ${track.fileName}: ${e.message}")
+                    null
+                }
 
-                    track.parentFolderUri?.let { parentUriStr ->
-                        try {
-                            val parentDoc = DocumentFile.fromTreeUri(context, Uri.parse(parentUriStr))
-                                ?: DocumentFile.fromSingleUri(context, Uri.parse(parentUriStr))
-                            val baseName = track.fileName.substringBeforeLast(".")
-                            val newBaseName = sanitizedNewName.substringBeforeLast(".")
-                            val lrcDoc = parentDoc?.findFile("$baseName.lrc")
-                            lrcDoc?.renameTo("$newBaseName.lrc")
-                        } catch (e: Exception) {
-                            Log.w("FolderManager", "Could not rename companion .lrc file", e)
+                // Fallback 1: via TreeDocumentFile from treeUri
+                if (newUri == null) {
+                    try {
+                        val treeUriStr = track.treeUriString
+                            ?: if (uri.toString().contains("/document/")) uri.toString().substringBefore("/document/") else null
+                        if (!treeUriStr.isNullOrBlank()) {
+                            val treeUri = Uri.parse(treeUriStr)
+                            val treeDoc = DocumentFile.fromTreeUri(context, treeUri)
+                            val targetDoc = treeDoc?.findFile(track.fileName)
+                            if (targetDoc != null && targetDoc.renameTo(sanitizedNewName)) {
+                                newUri = targetDoc.uri
+                            }
                         }
+                    } catch (e: Exception) {
+                        Log.w("FolderManager", "TreeDocument fallback rename failed: ${e.message}")
+                    }
+                }
+
+                if (newUri != null) {
+                    val newUriStr = newUri.toString()
+                    val baseName = track.fileName.substringBeforeLast(".")
+                    val newBaseName = sanitizedNewName.substringBeforeLast(".")
+
+                    // Rename companion .lrc file if exists
+                    try {
+                        val treeUriStr = track.treeUriString
+                            ?: if (uri.toString().contains("/document/")) uri.toString().substringBefore("/document/") else null
+                        if (!treeUriStr.isNullOrBlank()) {
+                            val treeUri = Uri.parse(treeUriStr)
+                            val treeDoc = DocumentFile.fromTreeUri(context, treeUri)
+                            val lrcDoc = treeDoc?.findFile("$baseName.lrc")
+                            lrcDoc?.renameTo("$newBaseName.lrc")
+                        }
+                    } catch (e: Exception) {
+                        Log.w("FolderManager", "Could not rename companion .lrc file: ${e.message}")
                     }
 
                     val updated = track.copy(
@@ -507,6 +535,7 @@ class FolderManager(private val context: Context) {
                         fileUri = newUriStr
                     )
                     updateSingleTrackInCache(updated)
+                    Log.i("FolderManager", "Successfully renamed file: ${track.fileName} -> $sanitizedNewName")
                     return true to updated
                 }
             }

@@ -107,15 +107,15 @@ fun LibraryScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.GraphicEq,
+                                painter = androidx.compose.ui.res.painterResource(com.example.R.drawable.ic_bach_logo),
                                 contentDescription = null,
                                 tint = Color.Black,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Sound ID",
+                            text = "Bach",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onBackground
@@ -400,7 +400,7 @@ fun LibraryScreen(
                             Spacer(modifier = Modifier.height(8.dp))
 
                             Text(
-                                text = "Elige la carpeta donde guardas tus canciones MP3 o M4A. Sound ID detectará los archivos rápidamente y te permitirá editar carátulas y metadatos con facilidad.",
+                                text = "Elige la carpeta donde guardas tus canciones MP3 o M4A. Bach detectará los archivos rápidamente y te permitirá editar carátulas y metadatos con facilidad.",
                                 style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                                 textAlign = TextAlign.Center
                             )

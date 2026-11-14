@@ -3,19 +3,24 @@ package com.example.ui.theme
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
-// SonicTag Studio Palette
-val EmeraldAccent = Color(0xFF10B981)
-val EmeraldLight = Color(0xFF34D399)
-val EmeraldDark = Color(0xFF059669)
+// Bach Classical & Elegant Palette
+val BachGoldAccent = Color(0xFFC6A56E)
+val BachGoldLight = Color(0xFFDFBF88)
+val BachGoldDark = Color(0xFFA88950)
 
-val VioletAccent = Color(0xFF8B5CF6)
-val VioletLight = Color(0xFFA78BFA)
-val VioletDark = Color(0xFF6D28D9)
+val NavySlateAccent = Color(0xFF2563EB)
+val RoyalBronzeAccent = Color(0xFFB45309)
+val BaroqueEmeraldAccent = Color(0xFF059669)
+val ImperialVioletAccent = Color(0xFF7C3AED)
+val CabernetAccent = Color(0xFF9F1239)
 
-val CyanAccent = Color(0xFF06B6D4)
-val AmberAccent = Color(0xFFF59E0B)
-val RoseAccent = Color(0xFFF43F5E)
-val BlueAccent = Color(0xFF3B82F6)
+// Legacy compatibility aliases
+val EmeraldAccent = BaroqueEmeraldAccent
+val VioletAccent = ImperialVioletAccent
+val CyanAccent = Color(0xFF0284C7)
+val AmberAccent = RoyalBronzeAccent
+val RoseAccent = CabernetAccent
+val BlueAccent = NavySlateAccent
 
 // Dark Studio Surfaces
 val StudioDarkBg = Color(0xFF0D0F14)
@@ -33,4 +38,4 @@ val AmoledCardSurfaceVariant = Color(0xFF12151D)
 val AmoledBorder = Color(0xFF1E222D)
 
 // Dynamic Local Accent Provider
-val LocalAccentColor = staticCompositionLocalOf { EmeraldAccent }
+val LocalAccentColor = staticCompositionLocalOf { BachGoldAccent }

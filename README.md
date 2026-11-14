@@ -1,18 +1,19 @@
-# Sound ID 🎵
+# Bach 🎼
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/mgsc-personal/Sound-ID/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" alt="Sound ID Logo" width="100" height="100" onerror="this.style.display='none'"/>
+  <img src="https://raw.githubusercontent.com/mgsc-personal/Bach/main/app/src/main/res/drawable/bach_logo.svg" alt="Bach Logo" width="120" height="120" onerror="this.style.display='none'"/>
 </p>
 
 <p align="center">
-  <strong>Gestor avanzado de metadatos, carátulas y letras sincronizadas para Android</strong>
+  <strong>Gestor clásico de metadatos, carátulas y letras sincronizadas para Android</strong><br>
+  <em>by: MGSCOfficial</em>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-Android_10%2B-green.svg?style=flat-square&logo=android" alt="Android Platform"/>
   <img src="https://img.shields.io/badge/UI-Jetpack_Compose_Material_3-blue.svg?style=flat-square&logo=jetpackcompose" alt="Jetpack Compose"/>
   <img src="https://img.shields.io/badge/Kotlin-2.1.0-purple.svg?style=flat-square&logo=kotlin" alt="Kotlin"/>
-  <img src="https://img.shields.io/badge/Theme-Material_You_%26_AMOLED-darkgreen.svg?style=flat-square" alt="Material You & AMOLED"/>
+  <img src="https://img.shields.io/badge/Theme-Bach_Gold_%26_AMOLED-darkgreen.svg?style=flat-square" alt="Bach Gold & AMOLED"/>
   <img src="https://img.shields.io/badge/License-MIT-orange.svg?style=flat-square" alt="License"/>
 </p>
 
@@ -20,7 +21,7 @@
 
 ## 📌 Descripción
 
-**Sound ID** es una aplicación moderna y de alto rendimiento para Android desarrollada nativamente en **Kotlin** y **Jetpack Compose**. Diseñada para amantes de la música y coleccionistas audiófilos que requieren organizar, etiquetar y embellecer bibliotecas locales de archivos en formatos **MP3** y **M4A / AAC**.
+**Bach** es una aplicación moderna y de alto rendimiento para Android desarrollada nativamente en **Kotlin** y **Jetpack Compose**. Diseñada para amantes de la música y coleccionistas audiófilos que requieren organizar, etiquetar, renombrar y embellecer bibliotecas locales de archivos en formatos **MP3** y **M4A / AAC**.
 
 Permite identificar pistas de audio, descargar carátulas en alta definición (`1000x1000`), sincronizar letras en formato `.lrc` e incrustar metadatos definitivos de forma no destructiva con cero fricción visual.
 
@@ -85,8 +86,8 @@ Permite identificar pistas de audio, descargar carátulas en alta definición (`
 
 1. **Clonar el repositorio**:
    ```bash
-   git clone https://github.com/mgsc-personal/Sound-ID.git
-   cd Sound-ID
+   git clone https://github.com/mgsc-personal/Bach.git
+   cd Bach
    ```
 
 2. **Ejecutar pruebas unitarias**:

@@ -429,7 +429,8 @@ class GeminiRepository(
                 val list = mutableListOf<GeminiModelOption>()
                 val excludedKeywords = listOf(
                     "image", "banana", "tts", "transcribe", "robotics",
-                    "lyria", "omni", "computer-use", "deep-research", "customtools"
+                    "lyria", "omni", "computer-use", "deep-research", "customtools",
+                    "gemma", "argon", "carbon", "hydrogen"
                 )
                 for (i in 0 until arr.length()) {
                     val m = arr.getJSONObject(i)
@@ -449,11 +450,18 @@ class GeminiRepository(
                     }
                     if (isExcluded) continue
 
+                    // Ignore outdated experimental previews if newer stable/latest aliases exist
+                    if (modelId.contains("preview", ignoreCase = true)) continue
+
                     val cleanDisplayName = when (modelId) {
-                        "gemini-3.5-flash-lite" -> "Gemini 3.5 Flash Lite (Recomendado)"
-                        "gemini-3.5-flash" -> "Gemini 3.5 Flash (Alta Fidelidad)"
-                        "gemini-3.8-flash" -> "Gemini 3.8 Flash (Alta Demanda)"
+                        "gemini-flash-latest" -> "Gemini Flash (Latest • Recomendado)"
+                        "gemini-flash-lite-latest" -> "Gemini Flash Lite (Latest • Ultra Rápido)"
+                        "gemini-pro-latest" -> "Gemini Pro (Latest • Máxima Inteligencia)"
+                        "gemini-3.5-flash-lite" -> "Gemini 3.5 Flash Lite"
+                        "gemini-3.5-flash" -> "Gemini 3.5 Flash"
+                        "gemini-3.8-flash" -> "Gemini 3.8 Flash"
                         "gemini-2.5-flash" -> "Gemini 2.5 Flash"
+                        "gemini-2.5-flash-lite" -> "Gemini 2.5 Flash Lite"
                         "gemini-2.5-pro" -> "Gemini 2.5 Pro"
                         "gemini-3.1-flash-lite" -> "Gemini 3.1 Flash Lite"
                         else -> m.optString("displayName", modelId).ifBlank { modelId }
@@ -461,11 +469,29 @@ class GeminiRepository(
 
                     list.add(GeminiModelOption(id = modelId, displayName = cleanDisplayName))
                 }
+
+                // Ensure latest alias models are always available options
+                val latestAliases = listOf(
+                    GeminiModelOption("gemini-flash-latest", "Gemini Flash (Latest • Recomendado)"),
+                    GeminiModelOption("gemini-flash-lite-latest", "Gemini Flash Lite (Latest • Ultra Rápido)"),
+                    GeminiModelOption("gemini-pro-latest", "Gemini Pro (Latest • Máxima Inteligencia)")
+                )
+                for (alias in latestAliases) {
+                    if (list.none { it.id == alias.id }) {
+                        list.add(alias)
+                    }
+                }
+
                 val sorted = list.sortedBy { opt ->
-                    when {
-                        opt.id.contains("flash-lite", ignoreCase = true) -> 0
-                        opt.id.contains("flash", ignoreCase = true) -> 1
-                        else -> 2
+                    when (opt.id) {
+                        "gemini-flash-latest" -> 0
+                        "gemini-flash-lite-latest" -> 1
+                        "gemini-pro-latest" -> 2
+                        else -> when {
+                            opt.id.contains("flash-lite", ignoreCase = true) -> 3
+                            opt.id.contains("flash", ignoreCase = true) -> 4
+                            else -> 5
+                        }
                     }
                 }
                 Result.success(sorted)

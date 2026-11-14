@@ -219,14 +219,7 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         AccentColorPreset.values().forEach { preset ->
-                            val presetColor = when (preset) {
-                                AccentColorPreset.EMERALD -> EmeraldAccent
-                                AccentColorPreset.CYAN -> CyanAccent
-                                AccentColorPreset.VIOLET -> VioletAccent
-                                AccentColorPreset.AMBER -> AmberAccent
-                                AccentColorPreset.ROSE -> RoseAccent
-                                AccentColorPreset.BLUE -> BlueAccent
-                            }
+                            val presetColor = Color(preset.hexColor)
                             val isChosen = settings.accentPreset == preset && (!settings.dynamicColor || Build.VERSION.SDK_INT < Build.VERSION_CODES.S)
 
                             Box(
@@ -633,9 +626,11 @@ fun SettingsScreen(
                             availableModels.map { it.id to it.displayName }
                         } else {
                             listOf(
-                                "gemini-3.5-flash-lite" to "Flash Lite (Ultrarrápido y Estable)",
-                                "gemini-3.5-flash" to "Flash 3.5 (Recomendado)",
-                                "gemini-3.8-flash" to "Flash 3.8 (Experimental / Alta Demanda)"
+                                "gemini-flash-latest" to "Gemini Flash (Latest • Recomendado)",
+                                "gemini-flash-lite-latest" to "Gemini Flash Lite (Latest • Ultra Rápido)",
+                                "gemini-pro-latest" to "Gemini Pro (Latest • Máxima Inteligencia)",
+                                "gemini-2.5-flash" to "Gemini 2.5 Flash",
+                                "gemini-2.5-flash-lite" to "Gemini 2.5 Flash Lite"
                             )
                         }
 
@@ -841,7 +836,7 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // ==================== SECCIÓN 6: ACERCA DE ====================
-            SettingsSectionHeader(title = "Acerca de la Aplicación", icon = Icons.Default.Info, tint = accent)
+            SettingsSectionHeader(title = "Acerca de", icon = Icons.Default.Info, tint = accent)
 
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -858,16 +853,16 @@ fun SettingsScreen(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(46.dp)
+                            .size(50.dp)
                             .clip(RoundedCornerShape(12.dp))
                             .background(accent.copy(alpha = 0.2f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.GraphicEq,
+                            painter = androidx.compose.ui.res.painterResource(com.example.R.drawable.ic_bach_logo),
                             contentDescription = null,
                             tint = accent,
-                            modifier = Modifier.size(26.dp)
+                            modifier = Modifier.size(32.dp)
                         )
                     }
 
@@ -875,16 +870,23 @@ fun SettingsScreen(
 
                     Column {
                         Text(
-                            text = "Sound ID",
+                            text = "Bach",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                         )
                         Text(
-                            text = "Versión 1.5.0 • Edición Pro con Operaciones Masivas",
+                            text = "Versión 1.6",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        )
+                        Text(
+                            text = "by: MGSCOfficial",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = accent,
+                                fontWeight = FontWeight.SemiBold
                             )
                         )
                     }

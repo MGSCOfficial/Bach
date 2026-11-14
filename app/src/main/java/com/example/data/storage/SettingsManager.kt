@@ -10,12 +10,12 @@ enum class ThemeMode(val label: String) {
 }
 
 enum class AccentColorPreset(val id: String, val displayName: String, val hexColor: Long) {
-    EMERALD("emerald", "Esmeralda", 0xFF10B981),
-    VIOLET("violet", "Violeta", 0xFF8B5CF6),
-    CYAN("cyan", "Cian", 0xFF06B6D4),
-    AMBER("amber", "Ámbar", 0xFFF59E0B),
-    ROSE("rose", "Rosa", 0xFFF43F5E),
-    BLUE("blue", "Azul", 0xFF3B82F6)
+    BACH_GOLD("bach_gold", "Oro Clásico (Bach)", 0xFFC6A56E),
+    NAVY_SLATE("navy_slate", "Azul Nocturno", 0xFF2563EB),
+    ROYAL_BRONZE("royal_bronze", "Bronce Real", 0xFFB45309),
+    BAROQUE_EMERALD("baroque_emerald", "Esmeralda Barroca", 0xFF059669),
+    IMPERIAL_VIOLET("imperial_violet", "Púrpura Imperial", 0xFF7C3AED),
+    CABERNET("cabernet", "Vino Tinto", 0xFF9F1239)
 }
 
 enum class ViewLayoutMode {
@@ -26,7 +26,7 @@ enum class ViewLayoutMode {
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.DARK,
     val dynamicColor: Boolean = false,
-    val accentPreset: AccentColorPreset = AccentColorPreset.EMERALD,
+    val accentPreset: AccentColorPreset = AccentColorPreset.BACH_GOLD,
     val amoledDark: Boolean = false,
     val songsLayoutMode: ViewLayoutMode = ViewLayoutMode.LIST,
     val foldersLayoutMode: ViewLayoutMode = ViewLayoutMode.LIST,
@@ -135,11 +135,11 @@ class SettingsManager(context: Context) {
             ThemeMode.DARK
         }
 
-        val accentStr = prefs.getString(KEY_ACCENT_PRESET, AccentColorPreset.EMERALD.name) ?: AccentColorPreset.EMERALD.name
+        val accentStr = prefs.getString(KEY_ACCENT_PRESET, AccentColorPreset.BACH_GOLD.name) ?: AccentColorPreset.BACH_GOLD.name
         val accentPreset = try {
             AccentColorPreset.valueOf(accentStr)
         } catch (e: Exception) {
-            AccentColorPreset.EMERALD
+            AccentColorPreset.BACH_GOLD
         }
 
         return AppSettings(
@@ -176,10 +176,10 @@ class SettingsManager(context: Context) {
             geminiEnabled = prefs.getBoolean(KEY_GEMINI_ENABLED, false),
             geminiApiKey = prefs.getString(KEY_GEMINI_API_KEY, "") ?: "",
             geminiModel = run {
-                val rawModel = prefs.getString(KEY_GEMINI_MODEL, "gemini-3.5-flash-lite") ?: "gemini-3.5-flash-lite"
+                val rawModel = prefs.getString(KEY_GEMINI_MODEL, "gemini-flash-latest") ?: "gemini-flash-latest"
                 val migrated = when (rawModel) {
-                    "gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-3.8-flash" -> "gemini-3.5-flash-lite"
-                    "gemini-2.5-pro", "gemini-1.5-pro", "gemini-3.8-pro" -> "gemini-3.5-flash"
+                    "gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash" -> "gemini-flash-latest"
+                    "gemini-2.5-pro", "gemini-1.5-pro" -> "gemini-pro-latest"
                     else -> rawModel
                 }
                 if (migrated != rawModel) {

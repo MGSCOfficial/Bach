@@ -63,7 +63,7 @@ private fun buildLightColorScheme(accent: Color): ColorScheme {
 fun SonicTagTheme(
     themeMode: ThemeMode = ThemeMode.DARK,
     dynamicColor: Boolean = false,
-    accentPreset: AccentColorPreset = AccentColorPreset.EMERALD,
+    accentPreset: AccentColorPreset = AccentColorPreset.BACH_GOLD,
     amoledDark: Boolean = false,
     content: @Composable () -> Unit
 ) {

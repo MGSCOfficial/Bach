@@ -104,7 +104,7 @@ fun SongEditorScreen(
                 title = {
                     Column {
                         Text(
-                            text = "Sound ID — Editor",
+                            text = "Bach — Editor",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onBackground

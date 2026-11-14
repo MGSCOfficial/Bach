@@ -1,7 +1,37 @@
-# Changelog — Sound ID
+# Changelog — Bach
 
-Todos los cambios notables realizados en el proyecto **Sound ID** se documentan en este archivo.
+Todos los cambios notables realizados en el proyecto **Bach** se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
+
+---
+
+## [1.6] - 2026-11-13
+
+### Añadido & Rebranding
+- **Rebranding Completo a "Bach"**:
+  - Transformación integral de identidad visual y denominación de la aplicación: de "Sound ID" a **Bach** (`by: MGSCOfficial`).
+  - Nuevo imagotipo en vector SVG (`bach_logo.svg`) y Android Vector Drawable (`ic_bach_logo.xml`), representando la silueta clásica de Johann Sebastian Bach fusionada con una clave de sol en sus rizos.
+  - Generación de iconos adaptativos del sistema (`ic_launcher`, `ic_launcher_round`, `ic_launcher_foreground`, `ic_launcher_background`) con fondo azul nocturno `#08203C` y relieve dorado `#C6A56E`.
+  - Nueva sección "Acerca de" en Ajustes con el isotipo de Bach, versión 1.6 y créditos canónicos a MGSCOfficial.
+- **Paletas Clásicas Elegantes**:
+  - Reemplazo de los colores genéricos por una colección armónica de alta distinción:
+    - **Oro Clásico (Bach)** (`#C6A56E`) — Preset principal por defecto.
+    - **Azul Nocturno** (`#2563EB`)
+    - **Bronce Real** (`#B45309`)
+    - **Esmeralda Barroca** (`#059669`)
+    - **Púrpura Imperial** (`#7C3AED`)
+    - **Vino Tinto** (`#9F1239`)
+  - Preservación íntegra de soporte dinámico **Material You** y fondo **Negro AMOLED Puro (`#000000`)**.
+- **Modelos de Gemini Actualizados e Inteligentes**:
+  - Depuración y filtro inteligente en `GeminiRepository`: erradicación de modelos experimentales obsoletos o incompatibles (`tts`, `image`, `nano`, `banana`, `omni`, `lyria`, `transcribe`, `robotics`, `preview`).
+  - Priorización de los alias canónicos `-latest` siempre vigentes: `gemini-flash-latest` (Recomendado), `gemini-flash-lite-latest` (Ultra Rápido) y `gemini-pro-latest` (Máxima Inteligencia), junto a las versiones de producción estables `gemini-2.5-flash`, `gemini-2.5-flash-lite` y `gemini-2.5-pro`.
+
+### Corregido
+- **Reparación Determinista del Renombrado de Archivos Físicos**:
+  - Diagnóstico e identificación de la causa raíz: `SingleDocumentFile.renameTo()` en Android SAF arrojaba internamente `java.lang.UnsupportedOperationException` sobre URIs de árbol de documentos.
+  - Implementación de `DocumentsContract.renameDocument(context.contentResolver, uri, sanitizedNewName)` nativo con fallback a `TreeDocumentFile` e invalidación sincronizada de archivos complementarios `.lrc`, logrando renombrar de forma 100% efectiva los archivos en almacenamiento físico local.
+- **Migración de Repositorio en GitHub**:
+  - Renombrado del repositorio oficial en GitHub a `mgsc-personal/Bach` y actualización del remote local.
 
 ---
 
