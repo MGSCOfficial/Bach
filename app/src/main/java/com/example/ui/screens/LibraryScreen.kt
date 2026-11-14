@@ -90,63 +90,18 @@ fun LibraryScreen(
         modifier = modifier
             .fillMaxSize()
             .testTag("library_screen"),
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(LocalAccentColor.current, VioletAccent)
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                painter = androidx.compose.ui.res.painterResource(com.example.R.drawable.ic_bach_logo),
-                                contentDescription = null,
-                                tint = Color.Black,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Bach",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-                        )
-                    }
-                },
-                actions = {
-                    // Manual rescan button
-                    IconButton(
-                        onClick = { viewModel.rescanSavedFolders() },
-                        modifier = Modifier.testTag("btn_rescan_folders")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Re-escanear carpetas",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
-            )
-        }
+        containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .statusBarsPadding()
                 .padding(horizontal = 16.dp)
         ) {
-            // 1. Compact Search Field + Sort Button Row
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // 1. Compact Search Field + Action Buttons Row (Zero wasted space)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -177,7 +132,7 @@ fun LibraryScreen(
                         ) {
                             if (libraryState.searchQuery.isEmpty()) {
                                 Text(
-                                    text = "Buscar canción, artista o álbum...",
+                                    text = "Buscar",
                                     fontSize = 13.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                 )
@@ -212,7 +167,26 @@ fun LibraryScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+
+                // Rescan button integrated into compact top row
+                IconButton(
+                    onClick = { viewModel.rescanSavedFolders() },
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                        .testTag("btn_rescan_folders")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Re-escanear carpetas",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
 
                 // Toggle Grid / List view button
                 val isGrid = settingsState.songsLayoutMode == ViewLayoutMode.GRID
@@ -232,7 +206,7 @@ fun LibraryScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
                 // Sort Button and Dropdown Menu
                 Box {

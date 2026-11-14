@@ -104,8 +104,12 @@ class MainActivity : ComponentActivity() {
                                     )
 
                                     NavigationBar(
+                                        modifier = Modifier
+                                            .navigationBarsPadding()
+                                            .height(56.dp),
                                         containerColor = navBarColor,
-                                        tonalElevation = if (isAmoled) 0.dp else 4.dp
+                                        tonalElevation = if (isAmoled) 0.dp else 4.dp,
+                                        windowInsets = WindowInsets(0, 0, 0, 0)
                                     ) {
                                         MainTab.values().forEach { tab ->
                                             val isSelected = currentTab == tab
@@ -115,13 +119,14 @@ class MainActivity : ComponentActivity() {
                                                 icon = {
                                                     Icon(
                                                         imageVector = tab.icon,
-                                                        contentDescription = tab.label
+                                                        contentDescription = tab.label,
+                                                        modifier = Modifier.size(20.dp)
                                                     )
                                                 },
                                                 label = {
                                                     Text(
                                                         text = tab.label,
-                                                        fontSize = 11.sp,
+                                                        fontSize = 10.sp,
                                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                                                     )
                                                 },
