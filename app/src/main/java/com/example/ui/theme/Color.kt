@@ -16,7 +16,13 @@ val CabernetAccent = Color(0xFF9F1239)
 
 // Legacy compatibility aliases
 val EmeraldAccent = BaroqueEmeraldAccent
+val EmeraldLight = Color(0xFF34D399)
+val EmeraldDark = Color(0xFF059669)
+
 val VioletAccent = ImperialVioletAccent
+val VioletLight = Color(0xFFA78BFA)
+val VioletDark = Color(0xFF6D28D9)
+
 val CyanAccent = Color(0xFF0284C7)
 val AmberAccent = RoyalBronzeAccent
 val RoseAccent = CabernetAccent
