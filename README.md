@@ -1,12 +1,18 @@
 # Bach 🎵
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/MGSCOfficial/Bach/main/bach_logo.svg" alt="Bach Logo" width="120" height="120" onerror="this.style.display='none'"/>
+  <img src="bach_logo.png" alt="Bach Logo" width="120" height="120"/>
 </p>
 
 <p align="center">
   <strong>Gestor clásico de metadatos, carátulas y letras sincronizadas para Android</strong><br>
   <em>by: MGSCOfficial</em>
+</p>
+
+<p align="center">
+  <a href="https://github.com/MGSCOfficial/Bach/releases/latest">
+    <img src="https://img.shields.io/badge/Descargar_APK-v1.6.2-brightgreen?style=for-the-badge&logo=android" alt="Descargar APK"/>
+  </a>
 </p>
 
 <p align="center">
