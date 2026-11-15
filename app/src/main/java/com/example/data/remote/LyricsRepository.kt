@@ -56,12 +56,6 @@ class LyricsRepository {
             if (geniusResult != null) return@withContext geniusResult
         }
 
-        // 4. Musixmatch API (User API Key)
-        if (settings.lyricsSourceMusixmatch && settings.musixmatchApiKey.isNotBlank()) {
-            val musixmatchResult = fetchFromMusixmatch(trackName, artistName, settings.musixmatchApiKey)
-            if (musixmatchResult != null) return@withContext musixmatchResult
-        }
-
         return@withContext null
     }
 
@@ -232,6 +226,14 @@ class LyricsRepository {
             }
         }
 
+        // Consulta alternativa a NetEase Cloud Music
+        if (trackName.isNotBlank()) {
+            val netEaseCandidate = fetchFromNetEase(cleanTrack, cleanArtist)
+            if (netEaseCandidate != null && candidates.none { it.bestLyrics.trim() == netEaseCandidate.bestLyrics.trim() }) {
+                candidates.add(netEaseCandidate)
+            }
+        }
+
         candidates
     }
 
@@ -397,35 +399,6 @@ class LyricsRepository {
             }
         } catch (e: Exception) {
             Log.w("LyricsRepository", "Genius fetch failed", e)
-        }
-        return null
-    }
-
-    private fun fetchFromMusixmatch(trackName: String, artistName: String, apiKey: String): LyricsResult? {
-        try {
-            val encodedTrack = URLEncoder.encode(trackName, "UTF-8")
-            val encodedArtist = URLEncoder.encode(artistName, "UTF-8")
-            val url = "https://api.musixmatch.com/ws/1.1/matcher.lyrics.get?q_track=$encodedTrack&q_artist=$encodedArtist&apikey=$apiKey"
-            val request = Request.Builder().url(url).header("User-Agent", userAgent).build()
-
-            client.newCall(request).execute().use { resp ->
-                if (!resp.isSuccessful) return null
-                val body = resp.body?.string() ?: return null
-                val root = JSONObject(body)
-                val lyricsBody = root.optJSONObject("message")?.optJSONObject("body")?.optJSONObject("lyrics")
-                val text = lyricsBody?.optString("lyrics_body", null)?.trim()
-                if (!text.isNullOrBlank() && !text.equals("null", ignoreCase = true)) {
-                    return LyricsResult(
-                        trackName = trackName,
-                        artistName = artistName,
-                        plainLyrics = text,
-                        syncedLyrics = null,
-                        source = "Musixmatch"
-                    )
-                }
-            }
-        } catch (e: Exception) {
-            Log.w("LyricsRepository", "Musixmatch fetch failed", e)
         }
         return null
     }

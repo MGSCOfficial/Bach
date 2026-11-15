@@ -38,15 +38,27 @@ class GeminiRepository(
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
-        val FALLBACK_MODELS = listOf(
-            "gemini-3.5-flash-lite",
-            "gemini-3.5-flash"
+        val CANONICAL_MODELS = listOf(
+            GeminiModelOption("gemini-4-hydrogen", "Gemini 4 Hydrogen"),
+            GeminiModelOption("gemini-3.8-flash", "Gemini 3.8 Flash"),
+            GeminiModelOption("gemini-3.6-flash", "Gemini 3.6 Flash"),
+            GeminiModelOption("gemini-3.5-flash-lite", "Gemini 3.5 Flash Lite"),
+            GeminiModelOption("gemini-3.1-flash-lite", "Gemini 3.1 Flash Lite"),
+            GeminiModelOption("gemini-flash-latest", "Gemini Flash (Latest)"),
+            GeminiModelOption("gemini-flash-lite-latest", "Gemini Flash Lite (Latest)")
         )
 
+        val FALLBACK_MODELS = CANONICAL_MODELS.map { it.id }
+
         fun resolveModel(model: String): String = when (model.trim()) {
-            "gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash" -> "gemini-3.5-flash-lite"
-            "gemini-2.5-pro", "gemini-1.5-pro" -> "gemini-3.5-flash"
-            else -> model.trim().ifBlank { "gemini-3.5-flash-lite" }
+            "gemini-4-hydrogen" -> "gemini-4-hydrogen"
+            "gemini-3.8-flash" -> "gemini-3.8-flash"
+            "gemini-3.6-flash" -> "gemini-3.6-flash"
+            "gemini-3.5-flash-lite" -> "gemini-3.5-flash-lite"
+            "gemini-3.1-flash-lite" -> "gemini-3.1-flash-lite"
+            "gemini-flash-latest" -> "gemini-flash-latest"
+            "gemini-flash-lite-latest" -> "gemini-flash-lite-latest"
+            else -> "gemini-flash-latest"
         }
     }
 
@@ -423,82 +435,12 @@ class GeminiRepository(
                     val msg = parseErrorMessage(response.code, response.body?.string().orEmpty())
                     return@withContext Result.failure(Exception(msg))
                 }
-                val body = response.body?.string().orEmpty()
-                val root = JSONObject(body)
-                val arr = root.optJSONArray("models") ?: JSONArray()
-                val list = mutableListOf<GeminiModelOption>()
-                val excludedKeywords = listOf(
-                    "image", "banana", "tts", "transcribe", "robotics",
-                    "lyria", "omni", "computer-use", "deep-research", "customtools",
-                    "gemma", "argon", "carbon", "hydrogen"
-                )
-                for (i in 0 until arr.length()) {
-                    val m = arr.getJSONObject(i)
-                    val rawName = m.optString("name", "")
-                    val modelId = rawName.removePrefix("models/")
-                    val methods = m.optJSONArray("supportedGenerationMethods")
-                    val supportsGen = methods?.let { mArr ->
-                        (0 until mArr.length()).any { mArr.optString(it) == "generateContent" }
-                    } ?: false
-
-                    if (!supportsGen) continue
-                    if (!modelId.startsWith("gemini-", ignoreCase = true)) continue
-                    if (!modelId.contains("flash", ignoreCase = true) && !modelId.contains("pro", ignoreCase = true)) continue
-
-                    val isExcluded = excludedKeywords.any { ex ->
-                        modelId.contains(ex, ignoreCase = true) || m.optString("displayName", "").contains(ex, ignoreCase = true)
-                    }
-                    if (isExcluded) continue
-
-                    // Ignore outdated experimental previews if newer stable/latest aliases exist
-                    if (modelId.contains("preview", ignoreCase = true)) continue
-
-                    val cleanDisplayName = when (modelId) {
-                        "gemini-flash-latest" -> "Gemini Flash (Latest • Recomendado)"
-                        "gemini-flash-lite-latest" -> "Gemini Flash Lite (Latest • Ultra Rápido)"
-                        "gemini-pro-latest" -> "Gemini Pro (Latest • Máxima Inteligencia)"
-                        "gemini-3.5-flash-lite" -> "Gemini 3.5 Flash Lite"
-                        "gemini-3.5-flash" -> "Gemini 3.5 Flash"
-                        "gemini-3.8-flash" -> "Gemini 3.8 Flash"
-                        "gemini-2.5-flash" -> "Gemini 2.5 Flash"
-                        "gemini-2.5-flash-lite" -> "Gemini 2.5 Flash Lite"
-                        "gemini-2.5-pro" -> "Gemini 2.5 Pro"
-                        "gemini-3.1-flash-lite" -> "Gemini 3.1 Flash Lite"
-                        else -> m.optString("displayName", modelId).ifBlank { modelId }
-                    }
-
-                    list.add(GeminiModelOption(id = modelId, displayName = cleanDisplayName))
-                }
-
-                // Ensure latest alias models are always available options
-                val latestAliases = listOf(
-                    GeminiModelOption("gemini-flash-latest", "Gemini Flash (Latest • Recomendado)"),
-                    GeminiModelOption("gemini-flash-lite-latest", "Gemini Flash Lite (Latest • Ultra Rápido)"),
-                    GeminiModelOption("gemini-pro-latest", "Gemini Pro (Latest • Máxima Inteligencia)")
-                )
-                for (alias in latestAliases) {
-                    if (list.none { it.id == alias.id }) {
-                        list.add(alias)
-                    }
-                }
-
-                val sorted = list.sortedBy { opt ->
-                    when (opt.id) {
-                        "gemini-flash-latest" -> 0
-                        "gemini-flash-lite-latest" -> 1
-                        "gemini-pro-latest" -> 2
-                        else -> when {
-                            opt.id.contains("flash-lite", ignoreCase = true) -> 3
-                            opt.id.contains("flash", ignoreCase = true) -> 4
-                            else -> 5
-                        }
-                    }
-                }
-                Result.success(sorted)
+                // Si la clave es válida y la llamada tiene éxito, retornamos los 7 modelos curados oficiales de AI Studio
+                Result.success(CANONICAL_MODELS)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error al listar modelos de Gemini", e)
-            Result.failure(e)
+            Result.success(CANONICAL_MODELS)
         }
     }
 

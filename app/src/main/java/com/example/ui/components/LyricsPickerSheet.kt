@@ -67,7 +67,7 @@ fun LyricsPickerSheet(
                         )
                     )
                     Text(
-                        text = "${candidates.size} versiones encontradas en LRCLIB",
+                        text = "${candidates.size} opciones de letra encontradas",
                         style = MaterialTheme.typography.bodySmall.copy(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -191,43 +191,60 @@ private fun LyricsCandidateCard(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // Badge: Synced LRC vs Plain Text
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = if (isSynced) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
-                    border = BorderStroke(
-                        1.dp,
-                        if (isSynced) accent else MaterialTheme.colorScheme.outlineVariant
-                    )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    // Badge de Proveedor de la Letra
+                    val (srcBg, srcColor) = when {
+                        candidate.source.contains("NetEase", ignoreCase = true) -> Pair(RoseAccent.copy(alpha = 0.18f), RoseAccent)
+                        candidate.source.contains("Genius", ignoreCase = true) -> Pair(AmberAccent.copy(alpha = 0.18f), AmberAccent)
+                        candidate.source.contains("Gemini", ignoreCase = true) -> Pair(VioletAccent.copy(alpha = 0.18f), VioletAccent)
+                        else -> Pair(CyanAccent.copy(alpha = 0.18f), CyanAccent)
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = srcBg,
+                        border = BorderStroke(1.dp, srcColor.copy(alpha = 0.6f))
                     ) {
-                        Icon(
-                            imageVector = if (isSynced) Icons.Default.Timer else Icons.Default.Description,
-                            contentDescription = null,
-                            tint = if (isSynced) accent else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = if (isSynced) "LRC Sincronizada" else "Texto Plano",
-                            fontSize = 11.sp,
+                            text = candidate.source,
+                            color = srcColor,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (isSynced) accent else MaterialTheme.colorScheme.onSurfaceVariant
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
-                }
-            }
 
-            if (candidate.source.isNotBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = candidate.source,
-                    fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                )
+                    // Badge: Synced LRC vs Plain Text
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (isSynced) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
+                        border = BorderStroke(
+                            1.dp,
+                            if (isSynced) accent else MaterialTheme.colorScheme.outlineVariant
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (isSynced) Icons.Default.Timer else Icons.Default.Description,
+                                contentDescription = null,
+                                tint = if (isSynced) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = if (isSynced) "LRC" else "Texto",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSynced) accent else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
             }
 
             if (previewLines.isNotBlank()) {

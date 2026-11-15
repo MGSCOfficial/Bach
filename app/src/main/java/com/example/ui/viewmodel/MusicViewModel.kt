@@ -8,10 +8,12 @@ import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.*
+import com.example.data.remote.AppUpdateInfo
 import com.example.data.remote.GeminiModelOption
 import com.example.data.remote.GeminiRepository
 import com.example.data.remote.LyricsRepository
 import com.example.data.remote.OnlineMetadataRepository
+import com.example.data.remote.UpdateCheckerRepository
 import com.example.data.storage.AccentColorPreset
 import com.example.data.storage.AppSettings
 import com.example.data.storage.FolderManager
@@ -137,6 +139,39 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoadingGeminiModels = MutableStateFlow(false)
     val isLoadingGeminiModels: StateFlow<Boolean> = _isLoadingGeminiModels.asStateFlow()
 
+    private val updateRepo = UpdateCheckerRepository()
+    private val _updateInfo = MutableStateFlow<AppUpdateInfo?>(null)
+    val updateInfo: StateFlow<AppUpdateInfo?> = _updateInfo.asStateFlow()
+
+    private val _isCheckingUpdate = MutableStateFlow(false)
+    val isCheckingUpdate: StateFlow<Boolean> = _isCheckingUpdate.asStateFlow()
+
+    fun checkForUpdates(manual: Boolean = false, context: Context? = null) {
+        viewModelScope.launch {
+            _isCheckingUpdate.value = true
+            val res = updateRepo.checkForUpdates()
+            _isCheckingUpdate.value = false
+            res.fold(
+                onSuccess = { info ->
+                    if (info != null && info.isNewer) {
+                        _updateInfo.value = info
+                    } else if (manual && context != null) {
+                        Toast.makeText(context, "Bach está actualizado a la versión más reciente (v${UpdateCheckerRepository.CURRENT_VERSION})", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onFailure = { err ->
+                    if (manual && context != null) {
+                        Toast.makeText(context, "No se pudo verificar: ${err.localizedMessage ?: "Error de red"}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
+        }
+    }
+
+    fun dismissUpdateDialog() {
+        _updateInfo.value = null
+    }
+
     fun updateThemeMode(mode: ThemeMode) {
         settingsManager.setThemeMode(mode)
         _settings.update { it.copy(themeMode = mode) }
@@ -255,6 +290,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         loadInitialLibrary()
+        checkForUpdates(manual = false)
     }
 
     // ==================== FAST LIBRARY INITIALIZATION & SCAN ====================
@@ -628,61 +664,82 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun selectCandidate(candidate: OnlineCandidate) {
+    fun selectCandidate(candidate: OnlineCandidate, mode: CandidateApplyMode = CandidateApplyMode.BOTH) {
         viewModelScope.launch {
-            // 1. Immediately apply ALL text metadata to draft
-            _editorState.update { state ->
-                val draft = state.draftTrack ?: return@update state
-                state.copy(
-                    selectedCandidate = candidate,
-                    showCandidateSheet = false,
-                    draftTrack = draft.copy(
-                        title = candidate.title.ifBlank { draft.title },
-                        artist = candidate.artist.ifBlank { draft.artist },
-                        album = candidate.album.ifBlank { draft.album },
-                        albumArtist = candidate.albumArtist.ifBlank { candidate.artist },
-                        year = candidate.year.ifBlank { draft.year },
-                        genre = candidate.genre.ifBlank { draft.genre },
-                        trackNumber = candidate.trackNumber.ifBlank { draft.trackNumber },
-                        discNumber = candidate.discNumber.ifBlank { draft.discNumber }
-                    ),
-                    isLoadingCovers = true,
-                    saveNotification = "Metadatos aplicados: ${candidate.title} — ${candidate.artist}"
-                )
-            }
-
-            // 2. Fetch cover art options from Cover Art Archive, iTunes, Deezer
-            val covers = onlineRepo.fetchCoverArtOptions(candidate)
-
-            // If candidate has a cover URL, download bytes immediately so it's loaded in memory
-            var bestCover = covers.firstOrNull { it.isSelected } ?: covers.firstOrNull()
-            if (bestCover != null && bestCover.bytes == null && !bestCover.url.isNullOrBlank()) {
-                val downloaded = onlineRepo.downloadImageBytes(bestCover.url)
-                if (downloaded != null) {
-                    bestCover = bestCover.copy(bytes = downloaded)
-                }
-            }
-
-            _editorState.update { state ->
-                val updatedDraft = if (bestCover?.bytes != null) {
-                    state.draftTrack?.copy(
-                        coverArtBytes = bestCover.bytes,
-                        hasCover = true
+            if (mode == CandidateApplyMode.BOTH || mode == CandidateApplyMode.METADATA_ONLY) {
+                // 1. Aplicar metadatos de texto al borrador
+                _editorState.update { state ->
+                    val draft = state.draftTrack ?: return@update state
+                    state.copy(
+                        selectedCandidate = candidate,
+                        showCandidateSheet = false,
+                        draftTrack = draft.copy(
+                            title = candidate.title.ifBlank { draft.title },
+                            artist = candidate.artist.ifBlank { draft.artist },
+                            album = candidate.album.ifBlank { draft.album },
+                            albumArtist = candidate.albumArtist.ifBlank { candidate.artist },
+                            year = candidate.year.ifBlank { draft.year },
+                            genre = candidate.genre.ifBlank { draft.genre },
+                            trackNumber = candidate.trackNumber.ifBlank { draft.trackNumber },
+                            discNumber = candidate.discNumber.ifBlank { draft.discNumber }
+                        ),
+                        saveNotification = if (mode == CandidateApplyMode.METADATA_ONLY) {
+                            "Metadatos aplicados desde ${candidate.source.displayName}: ${candidate.title}"
+                        } else {
+                            "Metadatos y carátula aplicados: ${candidate.title} — ${candidate.artist}"
+                        }
                     )
-                } else {
-                    state.draftTrack
                 }
-
-                state.copy(
-                    coverArtOptions = covers,
-                    selectedCoverOption = bestCover ?: state.selectedCoverOption,
-                    draftTrack = updatedDraft,
-                    isLoadingCovers = false
-                )
             }
 
-            // 3. Search and auto-populate lyrics from LRCLIB if enabled in settings
-            if (_settings.value.autoSearchLyrics) {
+            if (mode == CandidateApplyMode.BOTH || mode == CandidateApplyMode.COVER_ONLY) {
+                _editorState.update { state ->
+                    state.copy(
+                        selectedCandidate = candidate,
+                        showCandidateSheet = false,
+                        isLoadingCovers = true,
+                        saveNotification = if (mode == CandidateApplyMode.COVER_ONLY) {
+                            "Obteniendo carátula desde ${candidate.source.displayName}..."
+                        } else state.saveNotification
+                    )
+                }
+
+                // 2. Obtener opciones de carátula desde la fuente
+                val covers = onlineRepo.fetchCoverArtOptions(candidate)
+
+                var bestCover = covers.firstOrNull { it.isSelected } ?: covers.firstOrNull()
+                if (bestCover != null && bestCover.bytes == null && !bestCover.url.isNullOrBlank()) {
+                    val downloaded = onlineRepo.downloadImageBytes(bestCover.url)
+                    if (downloaded != null) {
+                        bestCover = bestCover.copy(bytes = downloaded)
+                    }
+                }
+
+                _editorState.update { state ->
+                    val curDraft = state.draftTrack ?: return@update state
+                    val updatedDraft = if (bestCover?.bytes != null) {
+                        curDraft.copy(
+                            coverArtBytes = bestCover.bytes,
+                            hasCover = true
+                        )
+                    } else curDraft
+
+                    state.copy(
+                        coverArtOptions = covers,
+                        selectedCoverOption = bestCover ?: state.selectedCoverOption,
+                        draftTrack = updatedDraft,
+                        isLoadingCovers = false,
+                        saveNotification = if (mode == CandidateApplyMode.COVER_ONLY) {
+                            "Carátula aplicada desde ${candidate.source.displayName}"
+                        } else {
+                            "Metadatos y carátula aplicados desde ${candidate.source.displayName}"
+                        }
+                    )
+                }
+            }
+
+            // 3. Buscar letra automáticamente si está habilitado y no es solo carátula
+            if (mode != CandidateApplyMode.COVER_ONLY && _settings.value.autoSearchLyrics) {
                 searchLyricsForCurrentTrack()
             }
         }
@@ -997,20 +1054,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val s = _settings.value
 
         if (!s.geminiEnabled || s.geminiApiKey.isBlank()) {
-            if (coverBytes != null && coverBytes.isNotEmpty()) {
-                val prompt = GeminiPromptHelper.buildCoverOcrPrompt(
-                    fileName = draft.fileName,
-                    existingTitle = draft.title,
-                    existingArtist = draft.artist,
-                    existingAlbum = draft.album
-                )
-                GeminiPromptHelper.shareCoverWithPrompt(context, prompt, coverBytes)
-            } else {
-                val prompt = GeminiPromptHelper.buildDisambiguationPrompt(
-                    fileName = draft.fileName,
-                    existingTags = mapOf("title" to draft.title, "artist" to draft.artist, "album" to draft.album)
-                )
-                GeminiPromptHelper.shareTextPrompt(context, prompt, "Identificar canción con Gemini...")
+            Toast.makeText(context, "Esta opción requiere una API Key de Google AI Studio. Configúrala en Ajustes.", Toast.LENGTH_LONG).show()
+            _editorState.update {
+                it.copy(saveNotification = "Esta opción requiere una API Key de Google AI Studio. Configúrala en Ajustes.")
             }
             return
         }
@@ -1082,7 +1128,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val draft = _editorState.value.draftTrack ?: return
         val s = _settings.value
         if (!s.geminiEnabled || s.geminiApiKey.isBlank()) {
-            Toast.makeText(context, "Configura tu clave de Gemini en Ajustes", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Esta opción requiere una API Key de Google AI Studio. Configúrala en Ajustes.", Toast.LENGTH_LONG).show()
+            _editorState.update {
+                it.copy(saveNotification = "Esta opción requiere una API Key de Google AI Studio. Configúrala en Ajustes.")
+            }
             return
         }
 
@@ -1219,7 +1268,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val s = _settings.value
 
         if (!s.geminiEnabled || s.geminiApiKey.isBlank()) {
-            Toast.makeText(context, "Configura tu clave de Gemini en Ajustes", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Esta opción requiere una API Key de Google AI Studio. Configúrala en Ajustes.", Toast.LENGTH_LONG).show()
+            _editorState.update {
+                it.copy(saveNotification = "Esta opción requiere una API Key de Google AI Studio. Configúrala en Ajustes.")
+            }
             return
         }
 
@@ -1330,13 +1382,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         } else {
-            // Enfoque 1: Compartir asistido (Sin API Key)
-            val prompt = GeminiPromptHelper.buildLyricsPrompt(
-                title = draft.title,
-                artist = draft.artist,
-                album = draft.album
-            )
-            GeminiPromptHelper.shareTextPrompt(context, prompt, "Consultar Letra con Gemini...")
+            Toast.makeText(context, "Esta opción requiere una API Key de Google AI Studio. Configúrala en Ajustes.", Toast.LENGTH_LONG).show()
+            _editorState.update {
+                it.copy(saveNotification = "Esta opción requiere una API Key de Google AI Studio. Configúrala en Ajustes.")
+            }
         }
     }
 
@@ -1374,11 +1423,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         } else {
-            val prompt = GeminiPromptHelper.buildDisambiguationPrompt(
-                fileName = draft.fileName,
-                existingTags = mapOf("title" to draft.title, "artist" to draft.artist, "album" to draft.album)
-            )
-            GeminiPromptHelper.shareTextPrompt(context, prompt, "Resolver canción con Gemini...")
+            Toast.makeText(context, "Esta opción requiere una API Key de Google AI Studio. Configúrala en Ajustes.", Toast.LENGTH_LONG).show()
+            _editorState.update {
+                it.copy(saveNotification = "Esta opción requiere una API Key de Google AI Studio. Configúrala en Ajustes.")
+            }
         }
     }
 

@@ -139,19 +139,8 @@ fun SongEditorScreen(
                         fontSize = 11.sp,
                         shape = RoundedCornerShape(6.dp),
                         paddingValues = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        modifier = Modifier.padding(end = 8.dp)
+                        modifier = Modifier.padding(end = 12.dp)
                     )
-
-                    IconButton(
-                        onClick = { viewModel.showDiffPreview() },
-                        modifier = Modifier.testTag("preview_diff_action")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Compare,
-                            contentDescription = "Previsualizar diferencias",
-                            tint = accent
-                        )
-                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = screenBg)
             )
@@ -692,7 +681,7 @@ fun SongEditorScreen(
                             } else {
                                 Icon(Icons.Default.Search, contentDescription = null, tint = Color.Black, modifier = Modifier.size(14.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Buscar en LRCLIB", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("Buscar Letras", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
                         }
 
@@ -1006,7 +995,7 @@ fun SongEditorScreen(
             activeSources = viewModel.getActiveMetadataSources(),
             onSearchQuery = { q -> viewModel.searchOnlineForCurrentTrack(q) },
             onAdvancedSearch = { t, a, al -> viewModel.searchOnlineAdvanced(t, a, al) },
-            onSelectCandidate = { candidate -> viewModel.selectCandidate(candidate) },
+            onSelectCandidate = { candidate, mode -> viewModel.selectCandidate(candidate, mode) },
             onDismiss = { viewModel.hideCandidateSheet() },
             onGeminiSearch = { viewModel.searchWithGeminiInResults(context, queryDefault) }
         )

@@ -31,6 +31,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -48,9 +49,12 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val accent = LocalAccentColor.current
     val availableModels by viewModel.availableGeminiModels.collectAsStateWithLifecycle()
     val isLoadingModels by viewModel.isLoadingGeminiModels.collectAsStateWithLifecycle()
+    val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
+    val isCheckingUpdate by viewModel.isCheckingUpdate.collectAsStateWithLifecycle()
 
     LaunchedEffect(settings.geminiApiKey) {
         if (settings.geminiApiKey.isNotBlank() && availableModels.isEmpty()) {
@@ -61,6 +65,74 @@ fun SettingsScreen(
     // State for API Key modal configuration
     var activeApiKeyTarget by remember { mutableStateOf<ApiKeyTarget?>(null) }
     var showGplDialog by remember { mutableStateOf(false) }
+
+    // Dialog for App Update
+    updateInfo?.let { info ->
+        if (info.isNewer) {
+            val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissUpdateDialog() },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.SystemUpdate,
+                            contentDescription = null,
+                            tint = accent,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "¡Nueva actualización!",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "${info.releaseTitle} (${info.tagName})",
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = accent
+                            )
+                        )
+                        if (info.releaseNotes.isNotBlank()) {
+                            Text(
+                                text = info.releaseNotes,
+                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                                maxLines = 8,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        } else {
+                            Text(
+                                text = "Hay una nueva versión disponible para descargar en GitHub.",
+                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.dismissUpdateDialog()
+                            uriHandler.openUri(info.downloadUrl ?: info.htmlUrl)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = Color.Black),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Descargar APK", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.dismissUpdateDialog() }) {
+                        Text("Más tarde", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(18.dp)
+            )
+        }
+    }
 
     activeApiKeyTarget?.let { target ->
         ApiKeyConfigDialog(
@@ -427,22 +499,6 @@ fun SettingsScreen(
                         onCheckedChange = { viewModel.updateSourceEnabled("genius", it) },
                         onConfigureKey = { activeApiKeyTarget = ApiKeyTarget.GENIUS }
                     )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Musixmatch (Requires API Key)
-                    SettingsSourceRow(
-                        name = "Musixmatch",
-                        description = "Mayor catálogo de letras del mundo. Requiere API Key",
-                        checked = settings.lyricsSourceMusixmatch,
-                        hasApiKey = true,
-                        keyConfigured = settings.musixmatchApiKey.isNotBlank(),
-                        accentColor = accent,
-                        onCheckedChange = { viewModel.updateSourceEnabled("musixmatch", it) },
-                        onConfigureKey = { activeApiKeyTarget = ApiKeyTarget.MUSIXMATCH }
-                    )
                 }
             }
 
@@ -629,11 +685,13 @@ fun SettingsScreen(
                             availableModels.map { it.id to it.displayName }
                         } else {
                             listOf(
-                                "gemini-flash-latest" to "Gemini Flash (Latest • Recomendado)",
-                                "gemini-flash-lite-latest" to "Gemini Flash Lite (Latest • Ultra Rápido)",
-                                "gemini-pro-latest" to "Gemini Pro (Latest • Máxima Inteligencia)",
-                                "gemini-2.5-flash" to "Gemini 2.5 Flash",
-                                "gemini-2.5-flash-lite" to "Gemini 2.5 Flash Lite"
+                                "gemini-4-hydrogen" to "Gemini 4 Hydrogen",
+                                "gemini-3.8-flash" to "Gemini 3.8 Flash",
+                                "gemini-3.6-flash" to "Gemini 3.6 Flash",
+                                "gemini-3.5-flash-lite" to "Gemini 3.5 Flash Lite",
+                                "gemini-3.1-flash-lite" to "Gemini 3.1 Flash Lite",
+                                "gemini-flash-latest" to "Gemini Flash (Latest)",
+                                "gemini-flash-lite-latest" to "Gemini Flash Lite (Latest)"
                             )
                         }
 
@@ -871,7 +929,7 @@ fun SettingsScreen(
                                 )
                             )
                             Text(
-                                text = "Versión 1.6.2",
+                                text = "Versión 1.6.3",
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -883,6 +941,50 @@ fun SettingsScreen(
                                     fontWeight = FontWeight.SemiBold
                                 )
                             )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Surface(
+                                onClick = { viewModel.checkForUpdates(manual = true, context = context) },
+                                shape = RoundedCornerShape(6.dp),
+                                color = accent.copy(alpha = 0.15f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (isCheckingUpdate) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(11.dp),
+                                            strokeWidth = 2.dp,
+                                            color = accent
+                                        )
+                                        Spacer(modifier = Modifier.width(5.dp))
+                                        Text(
+                                            text = "Comprobando...",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = accent,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 11.sp
+                                            )
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.SystemUpdate,
+                                            contentDescription = null,
+                                            tint = accent,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "Comprobar actualizaciones",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = accent,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 11.sp
+                                            )
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -1200,20 +1302,23 @@ fun SettingsSourceRow(
     }
 }
 
-enum class ApiKeyTarget(val title: String, val field1Label: String, val field2Label: String? = null) {
-    SPOTIFY("Spotify Web API", "Client ID", "Client Secret"),
-    LASTFM("Last.fm API", "API Key"),
-    DISCOGS("Discogs", "Personal Access Token"),
-    GENIUS("Genius API", "Client Access Token"),
-    MUSIXMATCH("Musixmatch API", "API Key"),
-    GEMINI("Google Gemini (AI Studio)", "API Key");
+enum class ApiKeyTarget(
+    val title: String,
+    val field1Label: String,
+    val field2Label: String? = null,
+    val helpUrl: String? = null
+) {
+    SPOTIFY("Spotify Web API", "Client ID", "Client Secret", "https://developer.spotify.com/dashboard"),
+    LASTFM("Last.fm API", "API Key", null, "https://www.last.fm/api/account/create"),
+    DISCOGS("Discogs", "Personal Access Token", null, "https://www.discogs.com/settings/developers"),
+    GENIUS("Genius API", "Client Access Token", null, "https://genius.com/api-clients/new"),
+    GEMINI("Google Gemini (AI Studio)", "API Key", null, "https://aistudio.google.com/app/apikey");
 
     fun getCurrentKey1(settings: com.example.data.storage.AppSettings): String = when (this) {
         SPOTIFY -> settings.spotifyClientId
         LASTFM -> settings.lastFmApiKey
         DISCOGS -> settings.discogsToken
         GENIUS -> settings.geniusToken
-        MUSIXMATCH -> settings.musixmatchApiKey
         GEMINI -> settings.geminiApiKey
     }
 
@@ -1231,7 +1336,6 @@ enum class ApiKeyTarget(val title: String, val field1Label: String, val field2La
             LASTFM -> viewModel.updateApiKey("lastfm", key1)
             DISCOGS -> viewModel.updateApiKey("discogs", key1)
             GENIUS -> viewModel.updateApiKey("genius", key1)
-            MUSIXMATCH -> viewModel.updateApiKey("musixmatch", key1)
             GEMINI -> viewModel.updateGeminiApiKey(key1)
         }
     }
@@ -1289,6 +1393,34 @@ fun ApiKeyConfigDialog(
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                if (!target.helpUrl.isNullOrBlank()) {
+                    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+                    Surface(
+                        onClick = { uriHandler.openUri(target.helpUrl) },
+                        shape = RoundedCornerShape(8.dp),
+                        color = accent.copy(alpha = 0.12f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.OpenInNew,
+                                contentDescription = null,
+                                tint = accent,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "¿No tienes tu clave? Solicitar API Key aquí ↗",
+                                color = accent,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
 
                 // Field 1
                 Column {

@@ -5,6 +5,22 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ---
 
+## [1.6.3] - 2026-11-15
+
+### Añadido
+- **Detección Automática y Manual de Actualizaciones**: Integración de `UpdateCheckerRepository` con la API de GitHub Releases (`MGSCOfficial/Bach`), notificando al usuario mediante diálogo modal interactivo con notas de versión y descarga directa del APK.
+- **Aplicación Granular de Resultados en Línea**: Ahora el usuario puede elegir aplicar **"Ambas"** (Metadatos y Carátula), **"Solo Metadatos"** o **"Solo Carátula"** en cada candidato de búsqueda (iTunes, MusicBrainz, Deezer, etc.).
+- **Insignia del Proveedor en Letras**: Cada versión de letra muestra prominentemente su fuente de origen (`LRCLIB`, `NetEase`, `Genius`) con diseño consistente a los metadatos.
+- **Enlaces Directos de Obtención de API Keys**: Botones directos en el diálogo de configuración para solicitar claves API en Google AI Studio, Spotify Dashboard, Last.fm, Discogs y Genius.
+- **Modelos Oficiales de Gemini**: Presentación exclusiva de los 7 modelos recomendados según AI Studio (`4 Hydrogen`, `3.8 Flash`, `3.6 Flash`, `3.5 Flash Lite`, `3.1 Flash Lite`, `Flash Latest`, `Flash Lite Latest`).
+
+### Modificado & Corregido
+- **Corrección de Invocación de Gemini sin Clave**: Eliminado por completo el fallback que copiaba el prompt al portapapeles o abría el menú de compartir al oprimir opciones de IA sin tener API Key. Ahora se muestra un aviso claro requiriendo la clave de Google AI Studio.
+- **Eliminación de Musixmatch**: Retirado Musixmatch del catálogo de fuentes de búsqueda lírica y de los ajustes de la aplicación.
+- **Optimización de la Barra Superior del Editor**: Eliminado el icono redundante de previsualización en la esquina superior derecha del TopAppBar.
+
+---
+
 ## [1.6] - 2026-11-13
 
 ### Añadido & Rebranding

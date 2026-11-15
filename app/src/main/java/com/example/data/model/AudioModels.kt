@@ -30,6 +30,12 @@ enum class MetadataSource(val displayName: String) {
     MANUAL("Manual");
 }
 
+enum class CandidateApplyMode {
+    BOTH,
+    METADATA_ONLY,
+    COVER_ONLY
+}
+
 data class AudioTrack(
     val id: String = UUID.randomUUID().toString(),
     val fileUri: String,

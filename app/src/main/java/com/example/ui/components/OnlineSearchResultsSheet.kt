@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
+import com.example.data.model.CandidateApplyMode
 import com.example.data.model.MetadataSource
 import com.example.data.model.OnlineCandidate
 import com.example.ui.theme.*
@@ -54,7 +55,7 @@ fun OnlineSearchResultsSheet(
     activeSources: List<MetadataSource> = listOf(MetadataSource.ITUNES, MetadataSource.MUSICBRAINZ, MetadataSource.DEEZER),
     onSearchQuery: (String) -> Unit,
     onAdvancedSearch: (title: String, artist: String, album: String) -> Unit = { _, _, _ -> },
-    onSelectCandidate: (OnlineCandidate) -> Unit,
+    onSelectCandidate: (OnlineCandidate, CandidateApplyMode) -> Unit,
     onDismiss: () -> Unit,
     onGeminiSearch: (() -> Unit)? = null
 ) {
@@ -83,9 +84,9 @@ fun OnlineSearchResultsSheet(
     previewCandidate?.let { candidate ->
         CandidatePreviewDialog(
             candidate = candidate,
-            onApply = {
+            onApply = { mode ->
                 previewCandidate = null
-                onSelectCandidate(candidate)
+                onSelectCandidate(candidate, mode)
             },
             onDismiss = { previewCandidate = null }
         )
@@ -474,7 +475,7 @@ fun OnlineSearchResultsSheet(
                         CandidateDetailedCard(
                             candidate = candidate,
                             onPreview = { previewCandidate = candidate },
-                            onSelect = { onSelectCandidate(candidate) }
+                            onSelect = { mode -> onSelectCandidate(candidate, mode) }
                         )
                     }
                 }
@@ -540,7 +541,7 @@ fun AdvancedInputField(
 fun CandidateDetailedCard(
     candidate: OnlineCandidate,
     onPreview: () -> Unit,
-    onSelect: () -> Unit
+    onSelect: (CandidateApplyMode) -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -717,31 +718,82 @@ fun CandidateDetailedCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Primary Apply Button (concise text, no clipping)
-            Button(
-                onClick = onSelect,
-                shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = LocalAccentColor.current,
-                    contentColor = Color.Black
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(42.dp)
-                    .testTag("btn_apply_candidate_${candidate.id}")
+            // Action Buttons: Ambas, Solo Metadatos, Solo Carátula
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Aplicar metadatos",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    maxLines = 1
-                )
+                // Button 1: Ambas
+                Button(
+                    onClick = { onSelect(CandidateApplyMode.BOTH) },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = LocalAccentColor.current,
+                        contentColor = Color.Black
+                    ),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                    modifier = Modifier
+                        .weight(1.2f)
+                        .height(40.dp)
+                        .testTag("btn_apply_candidate_${candidate.id}")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Ambas",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        maxLines = 1
+                    )
+                }
+
+                // Button 2: Solo Metadatos
+                OutlinedButton(
+                    onClick = { onSelect(CandidateApplyMode.METADATA_ONLY) },
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
+                    modifier = Modifier.weight(1.1f).height(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.EditNote,
+                        contentDescription = null,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Solo Meta",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 11.sp,
+                        maxLines = 1
+                    )
+                }
+
+                // Button 3: Solo Carátula (si hay disponible)
+                if (!candidate.coverArtUrl.isNullOrBlank()) {
+                    OutlinedButton(
+                        onClick = { onSelect(CandidateApplyMode.COVER_ONLY) },
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
+                        modifier = Modifier.weight(1.1f).height(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Image,
+                            contentDescription = null,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Solo Arte",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 11.sp,
+                            maxLines = 1
+                        )
+                    }
+                }
             }
         }
     }
@@ -750,7 +802,7 @@ fun CandidateDetailedCard(
 @Composable
 fun CandidatePreviewDialog(
     candidate: OnlineCandidate,
-    onApply: () -> Unit,
+    onApply: (CandidateApplyMode) -> Unit,
     onDismiss: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
@@ -921,34 +973,20 @@ fun CandidatePreviewDialog(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Actions: Cancel & Apply
-                Row(
+                // Actions: Granular Apply & Cancel
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(44.dp)
-                    ) {
-                        Text(
-                            text = "Cancelar",
-                            color = StudioTextSecondary,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-
                     Button(
-                        onClick = onApply,
+                        onClick = { onApply(CandidateApplyMode.BOTH) },
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = LocalAccentColor.current,
                             contentColor = Color.Black
                         ),
                         modifier = Modifier
-                            .weight(1.3f)
+                            .fillMaxWidth()
                             .height(44.dp)
                     ) {
                         Icon(
@@ -958,10 +996,70 @@ fun CandidatePreviewDialog(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Aplicar",
+                            text = "Aplicar Todo (Metadatos y Carátula)",
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
                             maxLines = 1
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { onApply(CandidateApplyMode.METADATA_ONLY) },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.EditNote,
+                                contentDescription = null,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Solo Metadatos",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
+                            )
+                        }
+
+                        if (!candidate.coverArtUrl.isNullOrBlank()) {
+                            OutlinedButton(
+                                onClick = { onApply(CandidateApplyMode.COVER_ONLY) },
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Image,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Solo Carátula",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Cancelar",
+                            color = StudioTextSecondary,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
