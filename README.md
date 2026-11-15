@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/MGSCOfficial/Bach/releases/latest">
-    <img src="https://img.shields.io/badge/Descargar_APK-v1.6.3-brightgreen?style=for-the-badge&logo=android" alt="Descargar APK"/>
+    <img src="https://img.shields.io/badge/Descargar_APK-v1.6.4-brightgreen?style=for-the-badge&logo=android" alt="Descargar APK"/>
   </a>
 </p>
 

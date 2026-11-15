@@ -26,7 +26,7 @@ class UpdateCheckerRepository {
         .build()
 
     companion object {
-        const val CURRENT_VERSION = "1.6.3"
+        const val CURRENT_VERSION = "1.6.4"
         private const val GITHUB_LATEST_RELEASE_URL =
             "https://api.github.com/repos/MGSCOfficial/Bach/releases/latest"
     }

@@ -5,6 +5,14 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ---
 
+## [1.6.4] - 2026-11-15
+
+### Modificado & Optimizado
+- **Simplificación del Guardado en el Editor**: Eliminado el botón secundario "Previsualizar" de la barra inferior de acciones en la pantalla de edición, dejando como llamada a la acción principal y exclusiva **"Guardar Archivo"** ocupando todo el ancho para una experiencia de guardado más limpia, directa y sin fricción.
+- **Preparación de Prueba de Detección de Actualizaciones**: Despliegue de la versión 1.6.4 en GitHub Releases para validar el flujo completo de detección y descarga de actualización en vivo desde la versión 1.6.3 en el dispositivo.
+
+---
+
 ## [1.6.3] - 2026-11-15
 
 ### Añadido
