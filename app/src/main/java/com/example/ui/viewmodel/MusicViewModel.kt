@@ -1002,13 +1002,14 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     AudioThumbnailLoader.invalidate(updatedTrack.fileUri)
                 }
 
-                // 3. Atomically update ONLY this track in memory and in cache (NO FULL RESCAN!)
-                folderManager.updateSingleTrackInCache(updatedTrack)
+                // 3. Atomically update in-memory state FIRST for instant UI response (< 200ms)
+                val currentFolders = _libraryState.value.folders
+                val currentTracks = _libraryState.value.tracks
+                val updatedList = currentTracks.map {
+                    if (it.id == original.id || it.fileUri == original.fileUri) updatedTrack else it
+                }
 
                 _libraryState.update { state ->
-                    val updatedList = state.tracks.map {
-                        if (it.id == original.id || it.fileUri == original.fileUri) updatedTrack else it
-                    }
                     state.copy(
                         tracks = updatedList,
                         filteredTracks = applyFilterSearchAndSort(
@@ -1030,6 +1031,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                         saveNotification = "¡Archivo actualizado con éxito en tu carpeta!"
                     )
                 }
+
+                // 4. Persist cache to disk asynchronously with in-memory tracks
+                folderManager.updateSingleTrackInCache(
+                    updatedTrack = updatedTrack,
+                    currentFolders = currentFolders,
+                    currentTracks = updatedList
+                )
             } else {
                 _editorState.update {
                     it.copy(

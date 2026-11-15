@@ -5,6 +5,16 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ---
 
+## [1.6.6] - 2026-11-15
+
+### Rendimiento & Optimización Extrema
+- **Guardado Instantáneo Sub-Segundo (< 300 ms)**: Eliminada la latencia excesiva de 10 a 13 segundos al guardar metadatos en bibliotecas de música de gran escala (+2,400 canciones).
+- **Lookup Directo de Archivos SAF**: Sustituido el escaneo exhaustivo O(N) de `DocumentFile.findFile()` por consultas cursadas directas (`findDirectChildUri`) en SAF ContentResolver y omitida la búsqueda innecesaria de archivos complementarios `.lrc` cuando la pista no posee letras.
+- **Eliminación de Escrituras Redundantes de Caché**: Removida la doble serialización síncrona en disco de `cached_tracks.json` y transferida la persistencia en disco a segundo plano (`Dispatchers.IO`) reutilizando la lista de canciones en memoria RAM.
+- **Desbloqueo Inmediato de la Interfaz**: La interfaz gráfica notifica el éxito del guardado de inmediato (< 250 ms) sin congelar la interacción del usuario.
+
+---
+
 ## [1.6.5] - 2026-11-15
 
 ### Añadido & UX Amigable

@@ -208,8 +208,13 @@ class FolderManager(private val context: Context) {
         }
     }
 
-    fun updateSingleTrackInCache(updatedTrack: AudioTrack) {
-        val (folders, cachedTracks) = loadCachedTracks()
+    fun updateSingleTrackInCache(
+        updatedTrack: AudioTrack,
+        currentFolders: List<MusicFolder>? = null,
+        currentTracks: List<AudioTrack>? = null
+    ) {
+        val folders = currentFolders ?: loadCachedTracks().first
+        val cachedTracks = currentTracks ?: loadCachedTracks().second
         if (cachedTracks.isEmpty()) return
         val newTracks = cachedTracks.map {
             if (it.id == updatedTrack.id || it.fileUri == updatedTrack.fileUri) updatedTrack else it
@@ -427,25 +432,66 @@ class FolderManager(private val context: Context) {
         }
     }
 
+    fun findDirectChildUri(parentUri: Uri, targetName: String): Uri? {
+        return try {
+            val parentDocId = try {
+                if (DocumentsContract.isDocumentUri(context, parentUri)) {
+                    DocumentsContract.getDocumentId(parentUri)
+                } else {
+                    DocumentsContract.getTreeDocumentId(parentUri)
+                }
+            } catch (e: Exception) {
+                DocumentsContract.getTreeDocumentId(parentUri)
+            }
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(parentUri, parentDocId)
+            val projection = arrayOf(
+                DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME
+            )
+            context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+                val idCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                val nameCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                while (cursor.moveToNext()) {
+                    val name = if (nameCol != -1) cursor.getString(nameCol) else null
+                    if (name.equals(targetName, ignoreCase = true)) {
+                        val docId = cursor.getString(idCol)
+                        return DocumentsContract.buildDocumentUriUsingTree(parentUri, docId)
+                    }
+                }
+            }
+            null
+        } catch (e: Exception) {
+            Log.w("FolderManager", "findDirectChildUri failed for $targetName: ${e.message}")
+            null
+        }
+    }
+
     fun saveLrcFile(track: AudioTrack, lyricsText: String): Boolean {
         if (lyricsText.isBlank() || lyricsText.trim().equals("null", ignoreCase = true)) return false
         val parentUriStr = track.parentFolderUri ?: return false
 
         try {
-            val parentDoc = DocumentFile.fromTreeUri(context, Uri.parse(parentUriStr))
-                ?: DocumentFile.fromSingleUri(context, Uri.parse(parentUriStr))
-                ?: return false
-
+            val parentUri = Uri.parse(parentUriStr)
             val baseName = track.fileName.substringBeforeLast(".")
             val lrcFileName = "$baseName.lrc"
 
-            var lrcDoc = parentDoc.findFile(lrcFileName)
-            if (lrcDoc == null) {
-                lrcDoc = parentDoc.createFile("text/plain", lrcFileName)
+            if (parentUri.scheme == "file") {
+                val fileDir = File(parentUri.path ?: return false)
+                val lrcFile = File(fileDir, lrcFileName)
+                lrcFile.writeText(lyricsText, Charsets.UTF_8)
+                return true
             }
 
-            if (lrcDoc != null) {
-                context.contentResolver.openOutputStream(lrcDoc.uri, "wt")?.use { stream ->
+            var lrcUri = findDirectChildUri(parentUri, lrcFileName)
+            if (lrcUri == null) {
+                val parentDoc = DocumentFile.fromTreeUri(context, parentUri)
+                    ?: DocumentFile.fromSingleUri(context, parentUri)
+                val created = parentDoc?.createFile("text/plain", lrcFileName)
+                lrcUri = created?.uri
+            }
+
+            if (lrcUri != null) {
+                context.contentResolver.openOutputStream(lrcUri, "wt")?.use { stream ->
                     OutputStreamWriter(stream, Charsets.UTF_8).use { writer ->
                         writer.write(lyricsText)
                     }
@@ -472,16 +518,17 @@ class FolderManager(private val context: Context) {
                 if (origFile.renameTo(destFile)) {
                     val baseName = track.fileName.substringBeforeLast(".")
                     val newBaseName = sanitizedNewName.substringBeforeLast(".")
-                    val origLrc = File(origFile.parentFile, "$baseName.lrc")
-                    if (origLrc.exists()) {
-                        origLrc.renameTo(File(origFile.parentFile, "$newBaseName.lrc"))
+                    if (track.hasLyrics) {
+                        val origLrc = File(origFile.parentFile, "$baseName.lrc")
+                        if (origLrc.exists()) {
+                            origLrc.renameTo(File(origFile.parentFile, "$newBaseName.lrc"))
+                        }
                     }
 
                     val updated = track.copy(
                         fileName = sanitizedNewName,
                         fileUri = destFile.toURI().toString()
                     )
-                    updateSingleTrackInCache(updated)
                     return true to updated
                 }
             } else {
@@ -516,25 +563,28 @@ class FolderManager(private val context: Context) {
                     val baseName = track.fileName.substringBeforeLast(".")
                     val newBaseName = sanitizedNewName.substringBeforeLast(".")
 
-                    // Rename companion .lrc file if exists
-                    try {
-                        val treeUriStr = track.treeUriString
-                            ?: if (uri.toString().contains("/document/")) uri.toString().substringBefore("/document/") else null
-                        if (!treeUriStr.isNullOrBlank()) {
-                            val treeUri = Uri.parse(treeUriStr)
-                            val treeDoc = DocumentFile.fromTreeUri(context, treeUri)
-                            val lrcDoc = treeDoc?.findFile("$baseName.lrc")
-                            lrcDoc?.renameTo("$newBaseName.lrc")
+                    // Rename companion .lrc file ONLY if track actually has lyrics
+                    if (track.hasLyrics) {
+                        try {
+                            val parentUriStr = track.parentFolderUri
+                                ?: track.treeUriString
+                                ?: if (uri.toString().contains("/document/")) uri.toString().substringBefore("/document/") else null
+                            if (!parentUriStr.isNullOrBlank()) {
+                                val parentUri = Uri.parse(parentUriStr)
+                                val lrcUri = findDirectChildUri(parentUri, "$baseName.lrc")
+                                if (lrcUri != null) {
+                                    DocumentsContract.renameDocument(context.contentResolver, lrcUri, "$newBaseName.lrc")
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.w("FolderManager", "Could not rename companion .lrc file: ${e.message}")
                         }
-                    } catch (e: Exception) {
-                        Log.w("FolderManager", "Could not rename companion .lrc file: ${e.message}")
                     }
 
                     val updated = track.copy(
                         fileName = sanitizedNewName,
                         fileUri = newUriStr
                     )
-                    updateSingleTrackInCache(updated)
                     Log.i("FolderManager", "Successfully renamed file: ${track.fileName} -> $sanitizedNewName")
                     return true to updated
                 }
