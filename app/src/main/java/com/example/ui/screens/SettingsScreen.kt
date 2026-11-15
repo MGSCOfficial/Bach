@@ -38,6 +38,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.storage.AccentColorPreset
 import com.example.data.storage.ThemeMode
+import com.example.ui.components.AppUpdateDialog
 import com.example.ui.theme.*
 import com.example.ui.util.FileRenameHelper
 import com.example.ui.viewmodel.MusicViewModel
@@ -67,71 +68,12 @@ fun SettingsScreen(
     var showGplDialog by remember { mutableStateOf(false) }
 
     // Dialog for App Update
-    updateInfo?.let { info ->
-        if (info.isNewer) {
-            val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
-            AlertDialog(
-                onDismissRequest = { viewModel.dismissUpdateDialog() },
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.SystemUpdate,
-                            contentDescription = null,
-                            tint = accent,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "¡Nueva actualización!",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
-                    }
-                },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = "${info.releaseTitle} (${info.tagName})",
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = accent
-                            )
-                        )
-                        if (info.releaseNotes.isNotBlank()) {
-                            Text(
-                                text = info.releaseNotes,
-                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                                maxLines = 8,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        } else {
-                            Text(
-                                text = "Hay una nueva versión disponible para descargar en GitHub.",
-                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            )
-                        }
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            viewModel.dismissUpdateDialog()
-                            uriHandler.openUri(info.downloadUrl ?: info.htmlUrl)
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = Color.Black),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("Descargar APK", fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { viewModel.dismissUpdateDialog() }) {
-                        Text("Más tarde", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                },
-                containerColor = MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(18.dp)
-            )
-        }
+    val showUpdateDetailsDialog by viewModel.showUpdateDetailsDialog.collectAsStateWithLifecycle()
+    if (showUpdateDetailsDialog && updateInfo != null && updateInfo!!.isNewer) {
+        AppUpdateDialog(
+            info = updateInfo!!,
+            onDismiss = { viewModel.dismissUpdateDialog() }
+        )
     }
 
     activeApiKeyTarget?.let { target ->
@@ -929,7 +871,7 @@ fun SettingsScreen(
                                 )
                             )
                             Text(
-                                text = "Versión 1.6.4",
+                                text = "Versión 1.6.5",
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

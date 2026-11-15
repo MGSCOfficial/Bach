@@ -40,12 +40,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.AudioTrack
 import com.example.data.model.SortOrder
 import com.example.data.storage.ViewLayoutMode
+import com.example.ui.components.AppUpdateDialog
 import com.example.ui.components.MiniPlayerBar
+import com.example.ui.components.SwipeableUpdateBanner
 import com.example.ui.components.TrackCard
 import com.example.ui.components.TrackGridCard
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.LibraryFilter
 import com.example.ui.viewmodel.MusicViewModel
+import androidx.compose.ui.platform.LocalUriHandler
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,6 +60,17 @@ fun LibraryScreen(
     val libraryState by viewModel.libraryState.collectAsStateWithLifecycle()
     val settingsState by viewModel.settings.collectAsStateWithLifecycle()
     val playerState by viewModel.audioPlayer.playerState.collectAsStateWithLifecycle()
+    val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
+    val isUpdateBannerDismissed by viewModel.isUpdateBannerDismissedForSession.collectAsStateWithLifecycle()
+    val showUpdateDetailsDialog by viewModel.showUpdateDetailsDialog.collectAsStateWithLifecycle()
+    val uriHandler = LocalUriHandler.current
+
+    if (showUpdateDetailsDialog && updateInfo != null && updateInfo!!.isNewer) {
+        AppUpdateDialog(
+            info = updateInfo!!,
+            onDismiss = { viewModel.closeUpdateDetailsDialog() }
+        )
+    }
     var showSortMenu by remember { mutableStateOf(false) }
     var showFolderManagerSheet by remember { mutableStateOf(false) }
 
@@ -418,6 +432,19 @@ fun LibraryScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         contentPadding = PaddingValues(bottom = 24.dp)
                     ) {
+                        if (updateInfo != null && updateInfo!!.isNewer && !isUpdateBannerDismissed) {
+                            item(key = "update_banner", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                                SwipeableUpdateBanner(
+                                    info = updateInfo!!,
+                                    onDismiss = { viewModel.dismissUpdateBannerForSession() },
+                                    onNotesClick = { viewModel.openUpdateDetailsDialog() },
+                                    onDownloadClick = {
+                                        val targetUrl = updateInfo?.downloadUrl ?: updateInfo?.htmlUrl
+                                        targetUrl?.let { uriHandler.openUri(it) }
+                                    }
+                                )
+                            }
+                        }
                         items(libraryState.filteredTracks, key = { it.id }) { track ->
                             val isPlaying = playerState.isPlaying && playerState.activeTrackId == track.id
                             TrackGridCard(
@@ -442,6 +469,19 @@ fun LibraryScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         contentPadding = PaddingValues(bottom = 24.dp)
                     ) {
+                        if (updateInfo != null && updateInfo!!.isNewer && !isUpdateBannerDismissed) {
+                            item(key = "update_banner") {
+                                SwipeableUpdateBanner(
+                                    info = updateInfo!!,
+                                    onDismiss = { viewModel.dismissUpdateBannerForSession() },
+                                    onNotesClick = { viewModel.openUpdateDetailsDialog() },
+                                    onDownloadClick = {
+                                        val targetUrl = updateInfo?.downloadUrl ?: updateInfo?.htmlUrl
+                                        targetUrl?.let { uriHandler.openUri(it) }
+                                    }
+                                )
+                            }
+                        }
                         items(libraryState.filteredTracks, key = { it.id }) { track ->
                             val isPlaying = playerState.isPlaying && playerState.activeTrackId == track.id
                             TrackCard(

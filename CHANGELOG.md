@@ -5,6 +5,17 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ---
 
+## [1.6.5] - 2026-11-15
+
+### Añadido & UX Amigable
+- **Banner de Actualización Integrado en Biblioteca**: Implementada tarjeta nativa de actualización con la misma estética de una canción (`TrackCard`), ubicada de manera no intrusiva en la parte superior de la lista y cuadrícula. Se desplaza naturalmente junto a la biblioteca sin bloquear la pantalla.
+- **Acciones Rápidas en Banner**: Incluye 2 botones de acceso inmediato:
+  1. **Icono de Documento**: Despliega el diálogo interactivo con las notas completas de la versión (`AppUpdateDialog`).
+  2. **Icono de Flecha de Descarga**: Inicia la descarga directa del APK de la nueva versión desde GitHub Releases.
+- **Descarte Temporal por Gesto (Swipe to Dismiss)**: El banner puede deslizarse lateralmente para descartarse durante la sesión activa sin molestar al usuario; reaparecerá amigablemente al reabrir la app hasta que se complete la actualización.
+
+---
+
 ## [1.6.4] - 2026-11-15
 
 ### Modificado & Optimizado

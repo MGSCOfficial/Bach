@@ -143,6 +143,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val _updateInfo = MutableStateFlow<AppUpdateInfo?>(null)
     val updateInfo: StateFlow<AppUpdateInfo?> = _updateInfo.asStateFlow()
 
+    private val _isUpdateBannerDismissedForSession = MutableStateFlow(false)
+    val isUpdateBannerDismissedForSession: StateFlow<Boolean> = _isUpdateBannerDismissedForSession.asStateFlow()
+
+    private val _showUpdateDetailsDialog = MutableStateFlow(false)
+    val showUpdateDetailsDialog: StateFlow<Boolean> = _showUpdateDetailsDialog.asStateFlow()
+
     private val _isCheckingUpdate = MutableStateFlow(false)
     val isCheckingUpdate: StateFlow<Boolean> = _isCheckingUpdate.asStateFlow()
 
@@ -155,6 +161,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 onSuccess = { info ->
                     if (info != null && info.isNewer) {
                         _updateInfo.value = info
+                        if (manual) {
+                            _showUpdateDetailsDialog.value = true
+                        }
                     } else if (manual && context != null) {
                         Toast.makeText(context, "Bach está actualizado a la versión más reciente (v${UpdateCheckerRepository.CURRENT_VERSION})", Toast.LENGTH_SHORT).show()
                     }
@@ -168,8 +177,20 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun dismissUpdateBannerForSession() {
+        _isUpdateBannerDismissedForSession.value = true
+    }
+
+    fun openUpdateDetailsDialog() {
+        _showUpdateDetailsDialog.value = true
+    }
+
+    fun closeUpdateDetailsDialog() {
+        _showUpdateDetailsDialog.value = false
+    }
+
     fun dismissUpdateDialog() {
-        _updateInfo.value = null
+        _showUpdateDetailsDialog.value = false
     }
 
     fun updateThemeMode(mode: ThemeMode) {
