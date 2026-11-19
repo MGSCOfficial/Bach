@@ -871,7 +871,7 @@ fun SettingsScreen(
                                 )
                             )
                             Text(
-                                text = "Versión 1.6.6",
+                                text = "Versión 1.6.7",
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

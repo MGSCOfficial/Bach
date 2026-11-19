@@ -5,6 +5,14 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ---
 
+## [1.6.7] - 2026-11-19
+
+### Corregido & UX de Actualizaciones
+- **Banner de Actualización Visible Inmediatamente (Zero Scroll)**: Reubicado el banner de actualización (`SwipeableUpdateBanner`) fuera de las listas virtuales (`LazyColumn` y `LazyVerticalGrid`), anclándolo en la cabecera del área de canciones con animación fluida (`AnimatedVisibility`). Ahora aparece de forma inmediata al detectarse una versión disponible sin exigir que el usuario haga scroll hacia abajo para revelarlo.
+- **Recordatorio Fijo y Descartable**: Permanece fijado en la parte superior mientras el usuario navega y hace scroll por su biblioteca musical, conservando el gesto de deslizamiento lateral (*swipe to dismiss*) para ocultarlo temporalmente durante la sesión.
+
+---
+
 ## [1.6.6] - 2026-11-15
 
 ### Rendimiento & Optimización Extrema

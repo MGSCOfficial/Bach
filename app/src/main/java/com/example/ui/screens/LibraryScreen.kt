@@ -6,6 +6,10 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -319,6 +323,26 @@ fun LibraryScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            // Update Banner: Pinned above content area so it is immediately visible without scrolling
+            AnimatedVisibility(
+                visible = updateInfo != null && updateInfo!!.isNewer && !isUpdateBannerDismissed,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column {
+                    SwipeableUpdateBanner(
+                        info = updateInfo!!,
+                        onDismiss = { viewModel.dismissUpdateBannerForSession() },
+                        onNotesClick = { viewModel.openUpdateDetailsDialog() },
+                        onDownloadClick = {
+                            val targetUrl = updateInfo?.downloadUrl ?: updateInfo?.htmlUrl
+                            targetUrl?.let { uriHandler.openUri(it) }
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+            }
+
             // Content Area
             if (libraryState.isLoading) {
                 Box(
@@ -432,19 +456,6 @@ fun LibraryScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         contentPadding = PaddingValues(bottom = 24.dp)
                     ) {
-                        if (updateInfo != null && updateInfo!!.isNewer && !isUpdateBannerDismissed) {
-                            item(key = "update_banner", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
-                                SwipeableUpdateBanner(
-                                    info = updateInfo!!,
-                                    onDismiss = { viewModel.dismissUpdateBannerForSession() },
-                                    onNotesClick = { viewModel.openUpdateDetailsDialog() },
-                                    onDownloadClick = {
-                                        val targetUrl = updateInfo?.downloadUrl ?: updateInfo?.htmlUrl
-                                        targetUrl?.let { uriHandler.openUri(it) }
-                                    }
-                                )
-                            }
-                        }
                         items(libraryState.filteredTracks, key = { it.id }) { track ->
                             val isPlaying = playerState.isPlaying && playerState.activeTrackId == track.id
                             TrackGridCard(
@@ -469,19 +480,6 @@ fun LibraryScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         contentPadding = PaddingValues(bottom = 24.dp)
                     ) {
-                        if (updateInfo != null && updateInfo!!.isNewer && !isUpdateBannerDismissed) {
-                            item(key = "update_banner") {
-                                SwipeableUpdateBanner(
-                                    info = updateInfo!!,
-                                    onDismiss = { viewModel.dismissUpdateBannerForSession() },
-                                    onNotesClick = { viewModel.openUpdateDetailsDialog() },
-                                    onDownloadClick = {
-                                        val targetUrl = updateInfo?.downloadUrl ?: updateInfo?.htmlUrl
-                                        targetUrl?.let { uriHandler.openUri(it) }
-                                    }
-                                )
-                            }
-                        }
                         items(libraryState.filteredTracks, key = { it.id }) { track ->
                             val isPlaying = playerState.isPlaying && playerState.activeTrackId == track.id
                             TrackCard(

@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.sonictag.vqxrtm"
     minSdk = 24
     targetSdk = 36
-    versionCode = 13
-    versionName = "1.6.6"
+    versionCode = 14
+    versionName = "1.6.7"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
